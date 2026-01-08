@@ -1,0 +1,88 @@
+{
+    "n_min": 200,
+    "n_max": 1000,
+    "nb_steps": 20,
+    "nb_rep": 3,
+    "dataset": "friedman1",
+    "n_features": 100,
+    "predictor": {
+        "loss": {
+            "name": "smoothed_pinball",
+            "params": {
+                "alpha": 0.2,
+                "tau": 0.5,
+                "dmax": 5
+            }
+        },
+        "kernel": {
+            "name": "laplacian",
+            "params": {
+                "gamma": 0.1
+            }
+        },
+        "lam": {
+            "value": 0.5,
+            "rate": 0.33
+        },
+        "params_fit": {
+            "_a_0": null,
+            "max_iter": 100,
+            "tol": 1e-6,
+            "custom": false
+        }
+    },
+    "non_conformity": {
+        "name": "absolute",
+        "params": {}
+    },
+    "region": {
+        "control_level": 0.1
+    },
+    "methods": [
+        "approx_fcp_0"
+    ],
+    "columns": [
+        "upper_bound",
+        "confidence_gap"
+    ],
+    "visu": {
+        "approx_fcp_0": {
+            "confidence_gap": {
+                "linestyle": "solid",
+                "color": "blue",
+                "marker": "s",
+                "linewidth" : 2
+            },
+            "upper_bound": {
+                "linestyle": "dashed",
+                "color": "red",
+                "marker": "o",
+                "linewidth" : 5
+            }
+        },
+        "approx_fcp_1": {
+            "confidence_gap": {
+                "linestyle": "solid",
+                "color": "orange",
+                "marker": "s"
+            },
+            "upper_bound": {
+                "linestyle": "dashed",
+                "color": "orange",
+                "marker": "s"
+            }
+        },
+        "approx_fcp_2": {
+            "confidence_gap": {
+                "linestyle": "solid",
+                "color": "red",
+                "marker": "X"
+            },
+            "upper_bound": {
+                "linestyle": "dashed",
+                "color": "red",
+                "marker": "X"
+            }
+        }
+    }
+}

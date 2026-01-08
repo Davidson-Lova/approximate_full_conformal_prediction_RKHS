@@ -1,0 +1,10 @@
+numpy
+matplotlib
+portion
+pandas
+seaborn
+scikit-learn
+tqdm
+black
+isort
+plotly

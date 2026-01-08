@@ -1,0 +1,6 @@
+.venv/
+
+
+*.csv
+*.eps
+*.jpeg

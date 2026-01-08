@@ -1,0 +1,13 @@
+{
+    "solveh_im":
+    {
+        "n_samples": 100,
+        "n_features": 4,
+        "rtol":0.000001
+    },
+    "smallest":
+    {
+        "n": 10,
+        "p": 4
+    }
+}

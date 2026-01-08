@@ -1,0 +1,57 @@
+{
+    "nb_rep": 100,
+    "methods": {
+        "oracle_cp": {},
+        "fcp": {},
+        "scp": {
+            "proper_train_size": 0.7
+        },
+        "approx_fcp_0":{},
+        "approx_fcp_1":{},
+        "approx_fcp_2":{}
+    },
+    "data": "friedman1",
+    "predictor": {
+        "loss": {
+            "name": "quadratic",
+            "params": {
+                "dmax": 5.0
+            }
+        },
+        "kernel": {
+            "name": "laplacian",
+            "params": {
+                "gamma": 0.1
+            }
+        },
+        "lam": {
+            "value": 0.5,
+            "rate": 0.0
+        },
+        "params_fit":{
+            "_a_0": null,
+            "max_iter": 100,
+            "tol": 1e-6,
+            "custom": false
+        }
+    },
+    "non_conformity": {
+        "name": "absolute",
+        "params": {}
+    },
+    "region":{
+        "control_level":0.1
+    },
+    "display":{
+        "fig_size":[12, 5],
+        "colors":{
+            "oracle_cp":"#00ff44",
+            "fcp":"#32a852",
+            "scp":"#e344b9",
+            "approx_fcp_0":"#7900ff",
+            "approx_fcp_1":"#383dff",
+            "approx_fcp_2":"#e20303"
+        },
+        "formats" : ["pdf", "eps", "jpeg"]
+    }
+}
