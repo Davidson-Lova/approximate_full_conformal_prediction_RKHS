@@ -1,17 +1,15 @@
 import numpy as np
 from .losses import maker
 
+
 def rkhs_norm(model_weights, gram_matrix):
     return np.sum(np.dot(model_weights.T, gram_matrix) * model_weights.T)
 
 
 class KernelEmpiricalRisk:
-    def __init__(self,
-        loss_name="log_cosh",
-        loss_params={}
-    ):
+    def __init__(self, loss_name="log_cosh", loss_params={"gamma": 1.0}):
         self.loss_name = loss_name
-        loss_ = maker(loss_name)(loss_params)
+        loss_ = maker(loss_name)(**loss_params)
         self.loss = loss_["f"]
         self.dloss = loss_["df"]
         self.d2loss = loss_["ddf"]
@@ -46,123 +44,123 @@ class KernelEmpiricalRisk:
                 (number_of_points, number_of_outputs), order="F"
             )
 
-        predictions = np.dot(gram_matrix, model_weights)
-        empirical_risk = np.mean(
+        predictions = gram_matrix @ model_weights
+        empirical_risk_ = np.mean(
             [
                 self.loss(output_point, prediction)
                 for output_point, prediction in zip(output_points, predictions)
             ]
         ) + lam * rkhs_norm(model_weights, gram_matrix)
 
-        return empirical_risk
+        return empirical_risk_
 
-    # def empirical_risk_gradient(self, model_weights, gram_matrix, output_points, lam):
-    #     """Computes the empirical risk, and its gradient w.r.t. model_weights.
+    def empirical_risk_gradient(self, model_weights, gram_matrix, output_points, lam):
+        """Computes the empirical risk, and its gradient w.r.t. model_weights.
 
-    #     Parameters
-    #     ----------
-    #     model_weights : ndarray of shape (number_of_points, number_of_outputs)
-    #         or (number_of_points * number_of_outputs, )
-    #         Model parameters
+        Parameters
+        ----------
+        model_weights : ndarray of shape (number_of_points, number_of_outputs)
+            or (number_of_points * number_of_outputs, )
+            Model parameters
 
-    #     gram_matrix : ndarray of shape (number_of_points, number_of_points)
+        gram_matrix : ndarray of shape (number_of_points, number_of_points)
 
-    #     output_points : ndarray of shape (number_of_points, )
+        output_points : ndarray of shape (number_of_points, )
 
-    #     lam : float
-    #         The regularization parameter
+        lam : float
+            The regularization parameter
 
-    #     Returns
-    #     -------
-    #     empirical_risk : float
-    #         Weighted average of losses per sample, plus penalty.
+        Returns
+        -------
+        empirical_risk : float
+            Weighted average of losses per sample, plus penalty.
 
-    #     gradient : ndarray of shape model_weights.shape
-    #          The gradient of the loss.
-    #     """
-    #     model_weights_is_flat = model_weights.ndim == 1
-    #     if model_weights_is_flat:
-    #         model_weights_size = model_weights.size
-    #         number_of_points = gram_matrix.shape[0]
-    #         number_of_outputs = int(model_weights_size / number_of_points)
-    #         model_weights = model_weights.reshape(
-    #             (number_of_points, number_of_outputs), order="F"
-    #         )
+        gradient : ndarray of shape model_weights.shape
+             The gradient of the loss.
+        """
+        model_weights_is_flat = model_weights.ndim == 1
+        if model_weights_is_flat:
+            model_weights_size = model_weights.size
+            number_of_points = gram_matrix.shape[0]
+            number_of_outputs = int(model_weights_size / number_of_points)
+            model_weights = model_weights.reshape(
+                (number_of_points, number_of_outputs), order="F"
+            )
 
-    #     predictions = np.dot(gram_matrix, model_weights)
+        predictions = gram_matrix @ model_weights
 
-    #     empirical_risk = np.mean(
-    #         [
-    #             self.loss(output_point, prediction)
-    #             for output_point, prediction in zip(output_points, predictions)
-    #         ]
-    #     ) + lam * rkhs_norm(model_weights, gram_matrix)
+        empirical_risk_ = np.mean(
+            [
+                self.loss(output_point, prediction)
+                for output_point, prediction in zip(output_points, predictions)
+            ]
+        ) + lam * rkhs_norm(model_weights, gram_matrix)
 
-    #     probability_matrix = softmax(predictions, axis=1)
+        gradient = (
+            np.mean(
+                [
+                    gram_vec.reshape(-1, 1)
+                    @ self.dloss(output_point, prediction).reshape(1, -1)
+                    for gram_vec, output_point, prediction in zip(
+                        gram_matrix, output_points, predictions
+                    )
+                ],
+                axis=0,
+            )
+            + 2 * lam * predictions
+        )
 
-    #     number_of_points, number_of_outputs = model_weights.shape
+        gradient = gradient.ravel(order="F")
+        return empirical_risk_, gradient
 
-    #     one_hot_output_points = (
-    #         output_points.reshape(-1, 1) == np.arange(number_of_outputs)
-    #     ).astype(float)
+    def gradient(self, model_weights, gram_matrix, output_points, lam):
+        """Computes the gradient of the empirical risk w.r.t. model_weights.
 
-    #     gradient = np.dot(
-    #         gram_matrix,
-    #         (probability_matrix - one_hot_output_points) / number_of_points
-    #         + 2 * lam * model_weights,
-    #     )
-    #     gradient = gradient.ravel(order="F")
+        Parameters
+        ----------
+        model_weights : ndarray of shape (number_of_points, number_of_outputs)
+            or (number_of_points * number_of_outputs, )
+            Model parameters
 
-    #     return empirical_risk, gradient
+        gram_matrix : ndarray of shape (number_of_points, number_of_points)
 
-    # def gradient(self, model_weights, gram_matrix, output_points, lam):
-    #     """Computes the gradient of the empirical risk w.r.t. model_weights.
+        output_points : ndarray of shape (number_of_points, )
 
-    #     Parameters
-    #     ----------
-    #     model_weights : ndarray of shape (number_of_points, number_of_outputs)
-    #         or (number_of_points * number_of_outputs, )
-    #         Model parameters
+        lam : float
+            The regularization parameter
 
-    #     gram_matrix : ndarray of shape (number_of_points, number_of_points)
+        Returns
+        -------
+        gradient : ndarray of shape model_weights.shape
+             The gradient of the loss.
+        """
+        model_weights_is_flat = model_weights.ndim == 1
+        if model_weights_is_flat:
+            model_weights_size = model_weights.size
+            number_of_points = gram_matrix.shape[0]
+            number_of_outputs = int(model_weights_size / number_of_points)
+            model_weights = model_weights.reshape(
+                (number_of_points, number_of_outputs), order="F"
+            )
 
-    #     output_points : ndarray of shape (number_of_points, )
+        predictions = gram_matrix @ model_weights
 
-    #     lam : float
-    #         The regularization parameter
+        gradient = (
+            np.mean(
+                [
+                    gram_vec.reshape(-1, 1)
+                    @ self.dloss(output_point, prediction).reshape(1, -1)
+                    for gram_vec, output_point, prediction in zip(
+                        gram_matrix, output_points, predictions
+                    )
+                ],
+                axis=0,
+            )
+            + 2 * lam * predictions
+        )
 
-    #     Returns
-    #     -------
-    #     gradient : ndarray of shape model_weights.shape
-    #          The gradient of the loss.
-    #     """
-    #     model_weights_is_flat = model_weights.ndim == 1
-    #     if model_weights_is_flat:
-    #         model_weights_size = model_weights.size
-    #         number_of_points = gram_matrix.shape[0]
-    #         number_of_outputs = int(model_weights_size / number_of_points)
-    #         model_weights = model_weights.reshape(
-    #             (number_of_points, number_of_outputs), order="F"
-    #         )
-
-    #     predictions = np.dot(gram_matrix, model_weights)
-
-    #     probability_matrix = softmax(predictions, axis=1)
-
-    #     number_of_points, number_of_outputs = model_weights.shape
-
-    #     one_hot_output_points = (
-    #         output_points.reshape(-1, 1) == np.arange(number_of_outputs)
-    #     ).astype(float)
-
-    #     gradient = np.dot(
-    #         gram_matrix,
-    #         (probability_matrix - one_hot_output_points) / number_of_points
-    #         + 2 * lam * model_weights,
-    #     )
-    #     gradient = gradient.ravel(order="F")
-
-    #     return gradient
+        gradient = gradient.ravel(order="F")
+        return gradient
 
     # def hess(self, model_weights, gram_matrix, output_points, lam):
     #     """Computes the hessian of the empirical risk w.r.t. model_weights.

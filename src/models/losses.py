@@ -9,6 +9,7 @@ import scipy.special as spsp
 def sub(targets, predictions):
     return targets - predictions
 
+
 def huber_loss(targets, predictions, delta=1):
     resid = sub(targets, predictions)
     return spsp.huber(delta, resid)
@@ -85,6 +86,7 @@ def logcosh(x):
     s = np.sign(x) * x
     p = np.exp(-2 * s)
     return s + np.log1p(p) - np.log(2)
+
 
 def log_cosh_maker(gamma=1):
     def log_cosh_loss(targets, predictions):
@@ -192,6 +194,7 @@ def linex_maker(alpha=1):
         return -diff2_linex(resid)
 
     return {"f": linex_loss, "df": diff_linex_loss, "ddf": diff2_linex_loss}
+
 
 def maker(name):
     if name == "quadratic":

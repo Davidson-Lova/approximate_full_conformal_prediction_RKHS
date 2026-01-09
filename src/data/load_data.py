@@ -3,6 +3,7 @@ import pandas as pd
 from sklearn import datasets
 from sklearn.datasets import make_regression
 
+
 def load_data(dataset="diabetes"):
     """
     Taken from E. Ndiaye's Script
