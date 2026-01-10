@@ -6,6 +6,30 @@ def rkhs_norm(model_weights, gram_matrix):
     return np.sum(np.dot(model_weights.T, gram_matrix) * model_weights.T)
 
 
+def compute_emp_risk(loss, output_points, predictions, gram_matrix, lam, model_weights):
+    return np.mean(
+        [
+            loss(output_point, prediction)
+            for output_point, prediction in zip(output_points, predictions)
+        ]
+    ) + lam * rkhs_norm(model_weights, gram_matrix)
+
+
+def compute_grad_emp_risk(dloss, output_points, predictions, gram_matrix, lam):
+    return (
+        np.mean(
+            [
+                gram_vec.reshape(-1, 1) @ dloss(output_point, prediction).reshape(1, -1)
+                for gram_vec, output_point, prediction in zip(
+                    gram_matrix, output_points, predictions
+                )
+            ],
+            axis=0,
+        )
+        + 2 * lam * predictions
+    )
+
+
 class KernelEmpiricalRisk:
     def __init__(self, loss_name="log_cosh", loss_params={"gamma": 1.0}):
         self.loss_name = loss_name
@@ -15,7 +39,7 @@ class KernelEmpiricalRisk:
         self.d2loss = loss_["ddf"]
 
     def empirical_risk(self, model_weights, gram_matrix, output_points, lam):
-        """Computes the empirical risk
+        """Computes the regularized empirical risk
 
         Parameters
         ----------
@@ -37,25 +61,17 @@ class KernelEmpiricalRisk:
         """
         model_weights_is_flat = model_weights.ndim == 1
         if model_weights_is_flat:
-            model_weights_size = model_weights.size
-            number_of_points = gram_matrix.shape[0]
-            number_of_outputs = int(model_weights_size / number_of_points)
-            model_weights = model_weights.reshape(
-                (number_of_points, number_of_outputs), order="F"
-            )
+            model_weights = model_weights.reshape(output_points.shape, order="F")
 
         predictions = gram_matrix @ model_weights
-        empirical_risk_ = np.mean(
-            [
-                self.loss(output_point, prediction)
-                for output_point, prediction in zip(output_points, predictions)
-            ]
-        ) + lam * rkhs_norm(model_weights, gram_matrix)
+        emp_risk = compute_emp_risk(
+            self.dloss, output_points, predictions, gram_matrix, lam, model_weights
+        )
 
-        return empirical_risk_
+        return emp_risk
 
     def empirical_risk_gradient(self, model_weights, gram_matrix, output_points, lam):
-        """Computes the empirical risk, and its gradient w.r.t. model_weights.
+        """Computes the regularized empirical risk, and its gradient w.r.t. model_weights.
 
         Parameters
         ----------
@@ -76,45 +92,26 @@ class KernelEmpiricalRisk:
             Weighted average of losses per sample, plus penalty.
 
         gradient : ndarray of shape model_weights.shape
-             The gradient of the loss.
+             The gradient of the regularized empirical risk.
         """
-        model_weights_is_flat = model_weights.ndim == 1
-        if model_weights_is_flat:
-            model_weights_size = model_weights.size
-            number_of_points = gram_matrix.shape[0]
-            number_of_outputs = int(model_weights_size / number_of_points)
-            model_weights = model_weights.reshape(
-                (number_of_points, number_of_outputs), order="F"
-            )
+        if model_weights.ndim == 1:
+            model_weights = model_weights.reshape(output_points.shape, order="F")
 
         predictions = gram_matrix @ model_weights
 
-        empirical_risk_ = np.mean(
-            [
-                self.loss(output_point, prediction)
-                for output_point, prediction in zip(output_points, predictions)
-            ]
-        ) + lam * rkhs_norm(model_weights, gram_matrix)
+        emp_risk = compute_emp_risk(
+            self.dloss, output_points, predictions, gram_matrix, lam, model_weights
+        )
 
-        gradient = (
-            np.mean(
-                [
-                    gram_vec.reshape(-1, 1)
-                    @ self.dloss(output_point, prediction).reshape(1, -1)
-                    for gram_vec, output_point, prediction in zip(
-                        gram_matrix, output_points, predictions
-                    )
-                ],
-                axis=0,
-            )
-            + 2 * lam * predictions
+        grad = compute_grad_emp_risk(
+            self.dloss, output_points, predictions, gram_matrix, lam
         )
 
         gradient = gradient.ravel(order="F")
-        return empirical_risk_, gradient
+        return emp_risk, grad
 
     def gradient(self, model_weights, gram_matrix, output_points, lam):
-        """Computes the gradient of the empirical risk w.r.t. model_weights.
+        """Computes the gradient of the regularized empirical risk w.r.t. model_weights.
 
         Parameters
         ----------
@@ -132,79 +129,122 @@ class KernelEmpiricalRisk:
         Returns
         -------
         gradient : ndarray of shape model_weights.shape
-             The gradient of the loss.
+             The gradient of the regularized empirical risk.
         """
-        model_weights_is_flat = model_weights.ndim == 1
-        if model_weights_is_flat:
-            model_weights_size = model_weights.size
-            number_of_points = gram_matrix.shape[0]
-            number_of_outputs = int(model_weights_size / number_of_points)
-            model_weights = model_weights.reshape(
-                (number_of_points, number_of_outputs), order="F"
-            )
+        if model_weights.ndim == 1:
+            model_weights = model_weights.reshape(output_points.shape, order="F")
 
         predictions = gram_matrix @ model_weights
 
-        gradient = (
-            np.mean(
+        grad = compute_grad_emp_risk(
+            self.dloss, output_points, predictions, gram_matrix, lam
+        )
+
+        grad = grad.ravel(order="F")
+        return grad
+
+    def gradient_hessian(self, model_weights, gram_matrix, output_points, lam):
+        """Computes the gradient and the hessian of the regularized empirical risk w.r.t. model_weights.
+
+        Parameters
+        ----------
+        model_weights : ndarray of shape (number_of_points, number_of_outputs)
+            Model parameters
+
+        gram_matrix : ndarray of shape (number_of_points, number_of_points)
+
+        output_points : ndarray of shape (number_of_points, )
+
+        lam : float
+            The regularization parameter
+
+        Returns
+        -------
+        hess : ndarray of shape (model_weights.shape, model_weights.shape)
+             The gradient of the regularized empirical risk.
+        """
+        if model_weights.ndim == 1:
+            model_weights = model_weights.reshape(output_points.shape, order="F")
+
+        predictions = gram_matrix @ model_weights
+
+        grad = grad = compute_grad_emp_risk(
+            self.dloss, output_points, predictions, gram_matrix, lam
+        )
+
+        hess = np.mean(
+            [
+                np.kron(
+                    self.d2loss(output_point, prediction).reshape(
+                        output_points.shape[1], output_points.shape[1]
+                    ),
+                    gram_vec.reshape(-1, 1) @ gram_vec.reshape(1, -1),
+                )
+                for gram_vec, output_point, prediction in zip(
+                    gram_matrix, output_points, predictions
+                )
+            ],
+            axis=0,
+        ) + 2 * lam * np.kron(np.eye(output_points.shape[1]), gram_matrix)
+
+        return grad, hess
+
+    def gradient_hessian_product(self, model_weights, gram_matrix, output_points, lam):
+        """Computes the gradient and the hessian vector product function of
+        the regularized empirical risk w.r.t. model_weights.
+
+        Parameters
+        ----------
+        model_weights : ndarray of shape (number_of_points, number_of_outputs)
+            Model parameters
+
+        gram_matrix : ndarray of shape (number_of_points, number_of_points)
+
+        output_points : ndarray of shape (number_of_points, )
+
+        lam : float
+            The regularization parameter
+
+        Returns
+        -------
+
+        grad : ndarray of shape model_weights.shape
+             The gradient of the regularized empirical risk.
+
+        hessp : callable
+            The hessian vector production function of the regularized empirical risk.
+        """
+        if model_weights.ndim == 1:
+            model_weights = model_weights.reshape(output_points.shape, order="F")
+
+        predictions = gram_matrix @ model_weights
+
+        grad = compute_grad_emp_risk(
+            self.dloss, output_points, predictions, gram_matrix, lam
+        )
+
+        def hessp(vec):
+            if vec.ndim == 1:
+                vec = vec.reshape(output_points.shape, order="F")
+
+            res = np.mean(
                 [
                     gram_vec.reshape(-1, 1)
-                    @ self.dloss(output_point, prediction).reshape(1, -1)
+                    @ (
+                        (gram_vec.reshape(1, -1) @ vec)
+                        @ self.d2loss(output_point, prediction).reshape(
+                            output_points.shape[1], output_points.shape[1]
+                        )
+                    )
                     for gram_vec, output_point, prediction in zip(
                         gram_matrix, output_points, predictions
                     )
                 ],
                 axis=0,
-            )
-            + 2 * lam * predictions
-        )
+            ) + 2 * lam * (gram_matrix @ vec)
 
-        gradient = gradient.ravel(order="F")
-        return gradient
+            res = res.ravel(order="F")
 
-    # def hess(self, model_weights, gram_matrix, output_points, lam):
-    #     """Computes the hessian of the empirical risk w.r.t. model_weights.
+            return res
 
-    #     Parameters
-    #     ----------
-    #     model_weights : ndarray of shape (number_of_points, number_of_outputs)
-    #         Model parameters
-
-    #     gram_matrix : ndarray of shape (number_of_points, number_of_points)
-
-    #     output_points : ndarray of shape (number_of_points, )
-
-    #     lam : float
-    #         The regularization parameter
-
-    #     Returns
-    #     -------
-    #     hess : ndarray of shape model_weights.shape
-    #          The gradient of the loss.
-    #     """
-    #     return
-
-    # def gradient_hessian_product(self, model_weights, gram_matrix, output_points, lam):
-    #     """Computes the sum of loss and gradient w.r.t. model_weights.
-
-    #     Parameters
-    #     ----------
-    #     model_weights : ndarray of shape (number_of_points, number_of_outputs)
-    #         Model parameters
-
-    #     gram_matrix : ndarray of shape (number_of_points, number_of_points)
-
-    #     output_points : ndarray of shape (number_of_points, )
-
-    #     lam : float
-    #         The regularization parameter
-
-    #     Returns
-    #     -------
-    #     loss : float
-    #         Weighted average of losses per sample, plus penalty.
-
-    #     gradient : ndarray of shape model_weights.shape
-    #          The gradient of the loss.
-    #     """
-    #     return
+        return grad, hessp

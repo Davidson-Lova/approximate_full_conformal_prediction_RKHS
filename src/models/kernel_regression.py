@@ -8,6 +8,7 @@ from scipy import optimize
 
 from .kernel_empirical_risk import KernelEmpiricalRisk
 
+
 def solve_kernel_regression(
     gram_matrix,
     output_points,
@@ -83,9 +84,7 @@ class KernelRegression:
                 "degree": self.degree,
                 "coef0": self.coef0,
             }
-        return pairwise_kernels(
-            X, Y, metric=self.kernel, filter_params=True, **params
-        )
+        return pairwise_kernels(X, Y, metric=self.kernel, filter_params=True, **params)
 
     def fit(self, input_points, output_points):
         self.input_points = input_points
@@ -102,7 +101,7 @@ class KernelRegression:
     def predict(self, new_input_points):
         if self.model_weights is None:
             raise ValueError("Please fit the model first.")
-        
+
         prediction_feature_matrix = self._get_kernel(
             new_input_points, self.input_points
         )
