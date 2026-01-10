@@ -33,6 +33,7 @@ def compute_grad_emp_risk(dloss, output_points, predictions, gram_matrix, lam):
 class KernelEmpiricalRisk:
     def __init__(self, loss_name="log_cosh", loss_params={"gamma": 1.0}):
         self.loss_name = loss_name
+        print(self.loss_name)
         loss_ = maker(loss_name)(**loss_params)
         self.loss = loss_["f"]
         self.dloss = loss_["df"]
@@ -106,8 +107,8 @@ class KernelEmpiricalRisk:
         grad = compute_grad_emp_risk(
             self.dloss, output_points, predictions, gram_matrix, lam
         )
+        grad = grad.ravel(order="F")
 
-        gradient = gradient.ravel(order="F")
         return emp_risk, grad
 
     def gradient(self, model_weights, gram_matrix, output_points, lam):
@@ -139,8 +140,8 @@ class KernelEmpiricalRisk:
         grad = compute_grad_emp_risk(
             self.dloss, output_points, predictions, gram_matrix, lam
         )
-
         grad = grad.ravel(order="F")
+
         return grad
 
     def gradient_hessian(self, model_weights, gram_matrix, output_points, lam):
@@ -171,6 +172,7 @@ class KernelEmpiricalRisk:
         grad = grad = compute_grad_emp_risk(
             self.dloss, output_points, predictions, gram_matrix, lam
         )
+        grad = grad.ravel(order="F")
 
         hess = np.mean(
             [
@@ -222,6 +224,7 @@ class KernelEmpiricalRisk:
         grad = compute_grad_emp_risk(
             self.dloss, output_points, predictions, gram_matrix, lam
         )
+        grad = grad.ravel(order="F")
 
         def hessp(vec):
             if vec.ndim == 1:

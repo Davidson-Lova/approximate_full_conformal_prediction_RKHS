@@ -47,7 +47,7 @@ def solve_kernel_regression(
         final_model_weights = optimization_result.x
 
     elif solver == "newton-cg":
-        func = empirical_risk.empirical_riske.gr
+        func = empirical_risk.empirical_risk
         grad = empirical_risk.gradient
         hess = empirical_risk.gradient_hessian_product  # hess = [gradient, hessp]
         final_model_weights, _ = _newton_cg(
@@ -77,8 +77,9 @@ class KernelRegression:
         degree=3.0,
         coef0=1.0,
         kernel_params=None,
-        solver="lbfgs",
+        solver="newton-cg",
         max_iter=100,
+        tol=1e-4,
     ):
         self.name = "KernelRegression"
         self.lam = lam  # only one is supported
@@ -93,6 +94,7 @@ class KernelRegression:
 
         self.solver = solver
         self.max_iter = max_iter
+        self.tol = tol
 
         self.model_weights = None
 
@@ -117,6 +119,7 @@ class KernelRegression:
             self.lam,
             self.solver,
             self.max_iter,
+            self.tol,
             self.loss_name,
             self.loss_params,
         )
