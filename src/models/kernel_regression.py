@@ -15,13 +15,17 @@ def solve_kernel_regression(
     output_points,
     lam=0.1,
     solver="newton-cg",
-    max_iter=100,
+    max_iter=200,
     tol=1e-4,
     loss_name="log_cosh",
     loss_params={"gamma": 1.0},
 ):
 
-    initial_model_weights = np.zeros(output_points.shape)
+
+    # initial_model_weights = np.zeros(output_points.shape)
+    # initial_model_weights = initial_model_weights.ravel(order="F")
+
+    initial_model_weights = gram_matrix @ np.random.normal(0, 1, output_points.shape)
     initial_model_weights = initial_model_weights.ravel(order="F")
 
     empirical_risk = KernelEmpiricalRisk(loss_name, loss_params)
@@ -78,7 +82,7 @@ class KernelRegression:
         coef0=1.0,
         kernel_params=None,
         solver="newton-cg",
-        max_iter=100,
+        max_iter=200,
         tol=1e-4,
     ):
         self.name = "KernelRegression"
