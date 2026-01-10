@@ -227,7 +227,7 @@ class KernelEmpiricalRisk:
             if vec.ndim == 1:
                 vec = vec.reshape(output_points.shape, order="F")
 
-            res = np.mean(
+            hess_vec_prod = np.mean(
                 [
                     gram_vec.reshape(-1, 1)
                     @ (
@@ -243,8 +243,8 @@ class KernelEmpiricalRisk:
                 axis=0,
             ) + 2 * lam * (gram_matrix @ vec)
 
-            res = res.ravel(order="F")
+            hess_vec_prod = hess_vec_prod.ravel(order="F")
 
-            return res
+            return hess_vec_prod
 
         return grad, hessp
