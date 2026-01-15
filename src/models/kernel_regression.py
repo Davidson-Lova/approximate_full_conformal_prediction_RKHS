@@ -6,9 +6,36 @@ import numpy as np  # for the math
 from sklearn.metrics.pairwise import pairwise_kernels
 from sklearn.utils.optimize import _newton_cg
 from scipy import optimize
+import scipy as sp
 
 from .kernel_empirical_risk import KernelEmpiricalRisk
 
+
+def newton(grad_hess, x0, gram_matrix, output_points, lam, max_iter=100, tol=1e-4):
+        """
+        Newton method for minimizer search
+        """
+        x = x0
+        early_stop = False
+
+        for iter in range(max_iter):
+
+            gradient, hessian = grad_hess(x, gram_matrix, output_points, lam)
+            delta_x = sp.linalg.solve(hessian, -gradient, assume_a="sym")
+            x = x + delta_x
+
+            if np.linalg.norm(delta_x) < tol:
+                early_stop = True
+                break
+
+        if early_stop:
+            print("early stop\n")
+            print("dx : {:2f}".format(np.linalg.norm(delta_x)))
+        else:
+            print("last stop")
+            print("dx : {:2f}".format(np.linalg.norm(delta_x)))
+
+        return x, iter
 
 def solve_kernel_regression(
     gram_matrix,
@@ -30,7 +57,7 @@ def solve_kernel_regression(
 
     empirical_risk = KernelEmpiricalRisk(loss_name, loss_params)
 
-    if solver not in ["lbfgs", "newton-cg"]:
+    if solver not in ["lbfgs", "newton-cg","newton-cholesky"]:
         raise ValueError("Only can handle this for now, sorry")
 
     elif solver == "lbfgs":
@@ -64,6 +91,17 @@ def solve_kernel_regression(
             tol=tol,
         )
         print("k:",k)
+    elif solver == "newton-cholesky":
+        grad_hess = empirical_risk.gradient_hessian
+        final_model_weights, _ = newton(
+            grad_hess=grad_hess,
+            x0=initial_model_weights,
+            gram_matrix=gram_matrix,
+            output_points=output_points,
+            lam=lam,
+            max_iter=max_iter,
+            tol=tol
+        )
     return final_model_weights
 
 
