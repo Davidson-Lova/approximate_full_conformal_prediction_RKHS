@@ -65,7 +65,7 @@ class KernelEmpiricalRisk:
 
         predictions = gram_matrix @ model_weights
         emp_risk = compute_emp_risk(
-            self.dloss, output_points, predictions, gram_matrix, lam, model_weights
+            self.loss, output_points, predictions, gram_matrix, lam, model_weights
         )
 
         return emp_risk
@@ -100,7 +100,7 @@ class KernelEmpiricalRisk:
         predictions = gram_matrix @ model_weights
 
         emp_risk = compute_emp_risk(
-            self.dloss, output_points, predictions, gram_matrix, lam, model_weights
+            self.loss, output_points, predictions, gram_matrix, lam, model_weights
         )
 
         grad = compute_grad_emp_risk(
@@ -168,7 +168,7 @@ class KernelEmpiricalRisk:
 
         predictions = gram_matrix @ model_weights
 
-        grad = grad = compute_grad_emp_risk(
+        grad = compute_grad_emp_risk(
             self.dloss, output_points, predictions, gram_matrix, lam
         )
         grad = grad.ravel(order="F")

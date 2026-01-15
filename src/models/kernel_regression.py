@@ -16,7 +16,7 @@ def solve_kernel_regression(
     lam=0.5,
     solver="newton-cg",
     max_iter=200,
-    tol=1e-4,
+    tol=1e-6,
     loss_name="log_cosh",
     loss_params={"alpha": 1.0},
 ):
@@ -54,7 +54,7 @@ def solve_kernel_regression(
         func = empirical_risk.empirical_risk
         grad = empirical_risk.gradient
         hess = empirical_risk.gradient_hessian_product  # hess = [gradient, hessp]
-        final_model_weights, _ = _newton_cg(
+        final_model_weights, k = _newton_cg(
             grad_hess=hess,
             func=func,
             grad=grad,
@@ -63,6 +63,7 @@ def solve_kernel_regression(
             maxiter=max_iter,
             tol=tol,
         )
+        print("k:",k)
     return final_model_weights
 
 
@@ -83,7 +84,7 @@ class KernelRegression:
         kernel_params=None,
         solver="newton-cg",
         max_iter=200,
-        tol=1e-4,
+        tol=1e-6,
     ):
         self.name = "KernelRegression"
         self.lam = lam  # only one is supported
