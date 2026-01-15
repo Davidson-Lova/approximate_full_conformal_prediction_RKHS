@@ -30,11 +30,10 @@ class OracleConformalPredictor:
     def __init__(
         self, predictor, non_conformity_name="absolute", non_conformity_params={}
     ):
-        self.name = "scp"
+        self.name = "oracle"
         self.predictor = predictor
         non_conformity_ = maker(non_conformity_name)(**non_conformity_params)
         self.non_conformity = non_conformity_["f"]
-        self.calibration_scores = None
 
     def fit_predict(
         self,
