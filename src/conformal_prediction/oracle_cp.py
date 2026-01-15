@@ -1,97 +1,87 @@
-"Oracle conformal region"
+"""
+The purpose of the present module is to build prediction sets using oracle conformal prediction provided a predictor.
+
+It should be able to be used as follows:
+```
+
+train_input_points, test_input_points, train_output_points, test_output_points = (
+    train_test_split(input_points, output_points, random_state=0)
+)
+
+predictor = Regression()
+
+conformal_predictor = OracleConformalPredictor(predictor, non_conformity_name="absolute")
+region_predictor = conformal_predictor.fit_predict(
+    train_input_points, train_output_points,
+    test_input_points, test_output_points
+)
+
+confidence_control_level = 0.1
+prediction_regions = region_predictor(confidence_control_level)
+```
+"""
 
 import numpy as np
 import portion as P
-from scipy.optimize import root_scalar
-
-from .base_cp import cp
+from ..models.losses import maker
 
 
-class oracle_cp(cp):
-    def __init__(self, predictor, non_conformity_maker, non_conformity_params):
-        super().__init__(predictor, non_conformity_maker, non_conformity_params)
-        self.name = "oracle_cp"
-
-    def _ncs_(
-        self,
-        X_train,
-        Y_train,
-        X_test,
-        Y_test,
-        params,
+class OracleConformalPredictor:
+    def __init__(
+        self, predictor, non_conformity_name="absolute", non_conformity_params={}
     ):
-        # Train a predictor over training data
-        N_test = X_test.shape[0]
+        self.name = "scp"
+        self.predictor = predictor
+        non_conformity_ = maker(non_conformity_name)(**non_conformity_params)
+        self.non_conformity = non_conformity_["f"]
+        self.calibration_scores = None
 
-        res = []
-        for j in range(N_test):
+    def fit_predict(
+        self,
+        train_input_points,
+        train_output_points,
+        test_input_points,
+        test_output_points,
+    ):
+        """
+        Prediction region function (as a function of the confidence level)
+        for each test input point
+        """
 
-            X_aug = np.vstack([X_train, X_test[j, :]])
-            Y_aug = np.vstack([Y_train, Y_test[j, :]])
-            self.fit(X_aug, X_aug, Y_aug, params)
-            nc_ncs_j = self.compute_ncs(X_aug, X_aug, Y_aug)
+        number_of_train_points = train_input_points.shape[0]
 
-            res += [list(nc_ncs_j.flatten())]
+        def region_predictor(confidence_control_level):
+            prediction_regions = []
+            for test_input_point, test_output_point in zip(
+                test_input_points, test_output_points
+            ):
 
-        return res
+                augmented_input_points = np.concatenate(
+                    (train_input_points, test_input_point.reshape(1, -1))
+                )
+                augmented_output_points = np.concatenate(
+                    (train_output_points, test_output_point.reshape(1, -1))
+                )
 
-    def pvalues(self, X_train, Y_train, X_test, Y_test, params):
-        scores_ = self._ncs_(X_train, Y_train, X_test, Y_test, params)
-        res = [
-            (sum(np.array(s[:-1]) >= s[-1]) + 1) / (X_train.shape[0] + 1)
-            for s in scores_
-        ]
-        return res
+                self.predictor.fit(augmented_input_points, augmented_output_points)
+                predictions = self.predictor.predict(augmented_input_points)
+                scores = self.non_conformity(augmented_output_points, predictions)
 
-    def region(self, X_train, Y_train, X_test, Y_test, params):
-
-        y_max = np.max(Y_train.flatten()).item()
-        y_min = np.min(Y_train.flatten()).item()
-
-        N_train = X_train.shape[0]
-        N_test = X_test.shape[0]
-
-        nc_ncs_j = []
-        y_hat_j = []
-
-        for j in range(N_test):
-
-            X_aug = np.vstack([X_train, X_test[j, :]])
-            Y_aug = np.vstack([Y_train, Y_test[j, :]])
-
-            self.fit(X_aug, X_aug, Y_aug, params)
-
-            nc_ncs_j += [self.compute_ncs(X_train, X_aug, Y_train)]
-            y_hat_j += [self.predict(X_test[j, :].reshape(1, -1), X_aug).flatten()[0]]
-
-        def region_(control_level):
-            predictive_region = []
-
-            for j in range(N_test):
-                qlevel = np.ceil((N_train + 1) * (1 - control_level)) / N_train
-                qHat = np.quantile(nc_ncs_j[j].flatten(), qlevel, method="higher")
-
-                def dsnp1(y):
-                    return qHat - self.non_conformity_bundle["f"](y, y_hat_j[j])
-
-                if (dsnp1(y_min) * dsnp1(y_hat_j[j])) >= 0:
-                    lb = y_min
-                else:
-                    lb_search = root_scalar(
-                        dsnp1, bracket=[y_min, y_hat_j[j]], rtol=1e-10
+                quantile_level = (
+                    np.ceil(
+                        (number_of_train_points + 1) * (1 - confidence_control_level)
                     )
-                    lb = lb_search.root if lb_search.converged else y_min
+                    / number_of_train_points
+                )
+                quantile_value = np.quantile(scores, quantile_level, method="higher")
 
-                if (dsnp1(y_max) * dsnp1(y_hat_j[j])) >= 0:
-                    ub = y_max
-                else:
-                    ub_search = root_scalar(
-                        dsnp1, bracket=[y_hat_j[j], y_max], rtol=1e-10
+                prediction_regions.append(
+                    P.closed(
+                        predictions[-1, :] - quantile_value,
+                        predictions[-1, :] + quantile_value,
                     )
-                    ub = ub_search.root if ub_search.converged else y_max
+                )
 
-                predictive_region += [P.closed(lb, ub)]
+            return prediction_regions
 
-            return predictive_region
-
-        return {"region": region_}
+        return region_predictor

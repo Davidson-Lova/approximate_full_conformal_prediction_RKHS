@@ -98,7 +98,6 @@ def solve_kernel_regression(
             tol=tol,
         )
 
-    print(np.mean((initial_model_weights - final_model_weights)**2))
     return final_model_weights
 
 
@@ -122,7 +121,7 @@ class KernelRegression:
         tol=1e-6,
     ):
         self.name = "KernelRegression"
-        
+
         self.lam = lam  # only one is supported
         self.kernel = kernel
         self.gamma = gamma
@@ -132,7 +131,7 @@ class KernelRegression:
 
         self.loss_name = loss_name
         self.loss_params = loss_params
-    
+
         self.solver = solver
         self.max_iter = max_iter
         self.tol = tol

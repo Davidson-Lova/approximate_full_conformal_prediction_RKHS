@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from sklearn import datasets
 from sklearn.datasets import make_regression
+from sklearn.preprocessing import StandardScaler
 
 
 def load_data(dataset="diabetes"):
@@ -43,5 +44,13 @@ def load_data(dataset="diabetes"):
             noise=1,
         )
         Y_ = Y_.reshape(-1, 1)
+
+    scaler = StandardScaler()
+    scaler.fit(X_)
+    X_ = scaler.transform(X_)
+
+    scaler_y = StandardScaler()
+    scaler_y.fit(Y_)
+    Y_ = scaler_y.transform(Y_)
 
     return X_, Y_

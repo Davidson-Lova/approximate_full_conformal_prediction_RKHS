@@ -20,11 +20,11 @@ def absolute_maker():
         resid = sub(targets, predictions)
         return np.abs(resid)
 
-    score_lams = {"rho": 1, "reg": "C0"}
+    loss_lams = {"rho": 1}
 
     return {
         "f": absolute_loss,
-        "lams": score_lams,
+        "lams": loss_lams,
     }
 
 
@@ -229,5 +229,4 @@ def maker(name):
     elif name == "linex":
         return linex_maker
     else:
-        print("Not available")
-        return quadratic_maker
+        raise ValueError("Function not found")
