@@ -1,35 +1,25 @@
-"""The purpose of the present module is to build prediction sets using stable conformal prediction for kernel ridge regression.
-
-It should be able to be used as follows:
-```
-
-train_input_points, test_input_points, train_output_points, test_output_points = (
-    train_test_split(input_points, output_points, random_state=0)
-)
-
-predictor = Regression()
-
-conformal_predictor = KernelRidgeConformalPredictor(predictor, non_conformity_name="absolute")
-region_predictor = conformal_predictor.fit_predict(train_input_points, train_output_points, test_input_points)
-
-confidence_control_level = 0.1
-prediction_regions = region_predictor(confidence_control_level)
-"""
+"Corrected Approximate full conformal region"
 
 # import matplotlib.pyplot as plt
 import numpy as np
-import portion as P
-from ..models.losses import maker
+
+from .base_cp import cp
+from .utils.utils import (
+    abs_callable,
+    add,
+    mul,
+    p_value_maker,
+    partial_2,
+    region_maker,
+    smallest_non_zero_eig,
+    sub,
+)
 
 
-class KernelRidgeConformalPredictor:
-    def __init__(
-        self, predictor, non_conformity_name="absolute", non_conformity_params={}
-    ):
-        self.name = "scp"
-        self.predictor = predictor
-        non_conformity_ = maker(non_conformity_name)(**non_conformity_params)
-        self.non_conformity = non_conformity_["f"]
+class approx_fcp_1(cp):
+    def __init__(self, predictor, non_conformity_maker, non_conformity_params):
+        super().__init__(predictor, non_conformity_maker, non_conformity_params)
+        self.name = "approx_fcp_1"
 
     def _ncs_(self, X_train, Y_train, X_test, Z_test, params):
 

@@ -21,7 +21,6 @@ import portion as P
 from ..models.losses import maker
 
 
-
 # This piece of code is taken from Eugène Ndiaye's ridgeCP in stable_conformal_prediction
 def kernel_ridge_region_predictor(A, B, confidence_control_level):
     n_samples = B.shape[0]
@@ -102,7 +101,7 @@ class KernelRidgeConformalPredictor:
     def __init__(
         self, predictor, non_conformity_name="absolute", non_conformity_params={}
     ):
-        self.name = "scp"
+        self.name = "kernel_ridge_cp"
         self.predictor = predictor
         non_conformity_ = maker(non_conformity_name)(**non_conformity_params)
         self.non_conformity = non_conformity_["f"]
