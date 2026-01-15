@@ -25,10 +25,8 @@ from scipy.optimize import minimize_scalar, root_scalar
 from sklearn.model_selection import train_test_split
 
 
-class SplitConformalPredictor():
-    def __init__(
-        self, model, non_conformity_name, non_conformity_params
-    ):
+class SplitConformalPredictor:
+    def __init__(self, model, non_conformity_name, non_conformity_params):
         self.name = "scp"
         self.model = model
         non_conformity_ = maker(non_conformity_name)(**non_conformity_params)

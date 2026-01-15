@@ -12,52 +12,48 @@ from .kernel_empirical_risk import KernelEmpiricalRisk
 
 
 def newton(grad_hess, x0, gram_matrix, output_points, lam, max_iter=100, tol=1e-4):
-        """
-        Newton method for minimizer search
-        """
-        x = x0
-        early_stop = False
+    """
+    Newton method for minimizer search
+    """
+    x = x0
+    early_stop = False
 
-        for iter in range(max_iter):
+    for iter in range(max_iter):
 
-            gradient, hessian = grad_hess(x, gram_matrix, output_points, lam)
-            delta_x = sp.linalg.solve(hessian, -gradient, assume_a="sym")
-            x = x + delta_x
+        gradient, hessian = grad_hess(x, gram_matrix, output_points, lam)
+        delta_x, _, _, _ = np.linalg.lstsq(hessian, -gradient)
+        x = x + delta_x
 
-            if np.linalg.norm(delta_x) < tol:
-                early_stop = True
-                break
+        if np.linalg.norm(delta_x) < tol:
+            early_stop = True
+            break
 
-        if early_stop:
-            print("early stop\n")
-            print("dx : {:2f}".format(np.linalg.norm(delta_x)))
-        else:
-            print("last stop")
-            print("dx : {:2f}".format(np.linalg.norm(delta_x)))
+    if early_stop:
+        print("early stop\n")
+        print("dx : {:2f}".format(np.linalg.norm(delta_x)))
+    else:
+        print("last stop")
+        print("dx : {:2f}".format(np.linalg.norm(delta_x)))
 
-        return x, iter
+    return x, iter
+
 
 def solve_kernel_regression(
     gram_matrix,
     output_points,
     lam=0.5,
-    solver="newton-cg",
+    solver="lbfgs",
     max_iter=200,
     tol=1e-6,
     loss_name="log_cosh",
     loss_params={"alpha": 1.0},
 ):
-
-
-    # initial_model_weights = np.zeros(output_points.shape)
-    # initial_model_weights = initial_model_weights.ravel(order="F")
-
     initial_model_weights = gram_matrix @ np.random.normal(0, 1, output_points.shape)
     initial_model_weights = initial_model_weights.ravel(order="F")
 
     empirical_risk = KernelEmpiricalRisk(loss_name, loss_params)
 
-    if solver not in ["lbfgs", "newton-cg","newton-cholesky"]:
+    if solver not in ["lbfgs", "newton-cg", "newton-cholesky"]:
         raise ValueError("Only can handle this for now, sorry")
 
     elif solver == "lbfgs":
@@ -90,7 +86,6 @@ def solve_kernel_regression(
             maxiter=max_iter,
             tol=tol,
         )
-        print("k:",k)
     elif solver == "newton-cholesky":
         grad_hess = empirical_risk.gradient_hessian
         final_model_weights, _ = newton(
@@ -100,8 +95,10 @@ def solve_kernel_regression(
             output_points=output_points,
             lam=lam,
             max_iter=max_iter,
-            tol=tol
+            tol=tol,
         )
+
+    print(np.mean((initial_model_weights - final_model_weights)**2))
     return final_model_weights
 
 
@@ -114,27 +111,28 @@ class KernelRegression:
         self,
         lam=0.5,
         kernel="linear",
+        gamma=None,
+        degree=3,
+        coef0=1,
+        kernel_params=None,
         loss_name="log_cosh",
         loss_params={"alpha": 1.0},
-        alpha=None,
-        degree=3.0,
-        coef0=1.0,
-        kernel_params=None,
-        solver="newton-cg",
+        solver="lbfgs",
         max_iter=200,
         tol=1e-6,
     ):
         self.name = "KernelRegression"
+        
         self.lam = lam  # only one is supported
-
         self.kernel = kernel
-        self.loss_name = loss_name
-        self.loss_params = loss_params
-        self.alpha = alpha
+        self.gamma = gamma
         self.degree = degree
         self.coef0 = coef0
         self.kernel_params = kernel_params
 
+        self.loss_name = loss_name
+        self.loss_params = loss_params
+    
         self.solver = solver
         self.max_iter = max_iter
         self.tol = tol
@@ -147,7 +145,7 @@ class KernelRegression:
             params = self.kernel_params or {}
         else:
             params = {
-                "alpha": self.alpha,
+                "gamma": self.gamma,
                 "degree": self.degree,
                 "coef0": self.coef0,
             }

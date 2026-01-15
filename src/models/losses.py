@@ -14,6 +14,7 @@ def huber_loss(targets, predictions, alpha=1):
     resid = sub(targets, predictions)
     return spsp.huber(alpha, resid)
 
+
 def absolute_maker():
     def absolute_loss(targets, predictions):
         resid = sub(targets, predictions)
@@ -25,6 +26,7 @@ def absolute_maker():
         "f": absolute_loss,
         "lams": score_lams,
     }
+
 
 def quadratic_maker(dmax=5.0):
     def quadratic_loss(targets, predictions):
@@ -98,8 +100,10 @@ def logcosh(x):
     p = np.exp(-2 * s)
     return s + np.log1p(p) - np.log(2)
 
+
 def sech2(x):
     return np.exp(-2 * logcosh(x))
+
 
 def log_cosh_maker(alpha=1):
     def log_cosh_loss(targets, predictions):
@@ -119,7 +123,10 @@ def log_cosh_maker(alpha=1):
 
     loss_lams = {
         "beta": 1 / alpha,
-        "xi": 2 * np.tanh(np.arcsinh(np.sqrt(2) ** -1)) * sech2(np.arcsinh(np.sqrt(2) ** -1)) / alpha**2,
+        "xi": 2
+        * np.tanh(np.arcsinh(np.sqrt(2) ** -1))
+        * sech2(np.arcsinh(np.sqrt(2) ** -1))
+        / alpha**2,
         "eta": 0,
         "rho": 1,
     }
