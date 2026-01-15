@@ -119,8 +119,6 @@ def log_cosh_maker(alpha=1):
         res = np.exp(-2 * logcosh(resid / alpha)) / alpha
         return res
 
-    c = -np.arcsinh(np.sqrt(2) ** -1) * alpha
-
     loss_lams = {
         "beta": 1 / alpha,
         "xi": 2

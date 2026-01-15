@@ -160,8 +160,11 @@ class KernelEmpiricalRisk:
 
         Returns
         -------
-        hess : ndarray of shape (model_weights.shape, model_weights.shape)
+        grad : ndarray of shape model_weights.shape
              The gradient of the regularized empirical risk.
+
+        hess : ndarray of shape (model_weights.shape, model_weights.shape)
+             The hessian of the regularized empirical risk.
         """
         if model_weights.ndim == 1:
             model_weights = model_weights.reshape(output_points.shape, order="F")

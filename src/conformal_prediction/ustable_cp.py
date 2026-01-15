@@ -1,4 +1,4 @@
-"""The purpose of the present module is to build prediction sets using conformal prediction for kernel ridge regression.
+"""The purpose of the present module is to build prediction sets using stable conformal prediction for kernel ridge regression.
 
 It should be able to be used as follows:
 ```
@@ -21,7 +21,7 @@ import portion as P
 from ..models.losses import maker
 
 
-def commpute_predictor_stability_bound(gram_matrix, lam, loss_rho):
+def compute_predictor_stability_bound(gram_matrix, lam, loss_rho):
     return np.sqrt(gram_matrix[-1, -1]) * (loss_rho / (lam * gram_matrix.shape[0]))
 
 
@@ -70,7 +70,7 @@ class UStableConformalPredictor:
                 ).flatten()
 
                 gram_matrix = self.predictor._get_kernel(augmented_input_points)
-                predictor_stability_bound = commpute_predictor_stability_bound(
+                predictor_stability_bound = compute_predictor_stability_bound(
                     gram_matrix, self.predictor.lam, self.loss_lams["rho"]
                 )
                 scores_stability_bounds = compute_scores_stability_bounds(

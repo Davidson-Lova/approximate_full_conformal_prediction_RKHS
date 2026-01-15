@@ -1,594 +1,355 @@
-"Corrected Approximate full conformal region"
+"""The purpose of the present module is to build prediction sets using approximate conformal prediction via influence function
+for kernel ridge regression.
 
-import numpy as np
+It should be able to be used as follows:
+```
 
-from .base_cp import cp
-from .utils import (
-    abs_callable,
-    add,
-    comp,
-    comp_2,
-    min_loc,
-    mul,
-    p_value_maker,
-    partial_2,
-    region_maker,
-    smallest_non_zero_eig,
-    solveh_im,
-    square_callable,
-    sub,
+train_input_points, test_input_points, train_output_points, test_output_points = (
+    train_test_split(input_points, output_points, random_state=0)
 )
 
+predictor = Regression()
 
-class approx_fcp_2(cp):
-    def __init__(self, predictor, non_conformity_maker, non_conformity_params):
-        super().__init__(predictor, non_conformity_maker, non_conformity_params)
-        self.name = "approx_fcp_2"
+conformal_predictor = InfluenceFunctionConformalPredictor(predictor, non_conformity_name="absolute")
+region_predictor = conformal_predictor.fit_predict(train_input_points, train_output_points, test_input_points)
 
-    def _ncs_(self, X_train, Y_train, X_test, Z_test, params):
+confidence_control_level = 0.1
+prediction_regions = region_predictor(confidence_control_level)
+"""
 
-        N_test = X_test.shape[0]
-        N_train_p1 = X_train.shape[0] + 1
+import numpy as np
+import matplotlib.pyplot as plt
+from ..models.losses import maker
+from ..models.kernel_empirical_risk import KernelEmpiricalRisk
+from .utils import inter_finder
 
-        ncs = []
-        K_diag = []
-        hat_Y_Np1 = []
-        d_loss_Np1_y = []
-        d_loss_Np1_z = []
-        K_diag_3half_mean = []
-        d_ncs = []
 
-        for j in range(N_test):
-            # Parameter approximation
-            X_aug = np.vstack((X_train, X_test[j, :]))
-            Y_aug = np.vstack((Y_train, Z_test[j, :]))
+def compute_approximate_predictions_(gram_matrix, dloss, proto_influence, predictions):
+    def approximate_predictions_(output_value):
+        proto_influence_predictions = gram_matrix @ proto_influence
+        influence_predictions_z = (
+            (-1.0)
+            * proto_influence_predictions
+            * (
+                dloss(np.zeros(predictions[-1, :].shape), predictions[-1, :])
+                / gram_matrix.shape[0]
+            )
+        )
+        influence_predictions_y = (
+            (-1.0)
+            * proto_influence_predictions
+            * (dloss(output_value, predictions[-1, :]) / gram_matrix.shape[0])
+        )
+        return predictions - influence_predictions_z + influence_predictions_y
 
-            self.fit(X_aug, X_aug, Y_aug, params)
+    return approximate_predictions_
 
-            hess = self.predictor._hessian(X_aug, X_aug, Y_aug)
-            hat_H = hess(self.predictor._a_)
 
-            # Compute K matrix
-            K_diag += [np.diagonal(self.predictor.K)]
-            K_diag_3half_mean += [np.mean(np.diagonal(self.predictor.K) ** 1.5)]
+def compute_train_scores_(
+    non_conformity, train_output_points, approximate_predictions_
+):
+    def train_scores_(output_value):
+        approximate_predictions = approximate_predictions_(output_value)
+        train_scores = non_conformity(
+            train_output_points,
+            approximate_predictions[:-1, :].reshape(train_output_points.shape),
+        ).flatten()
+        return train_scores
 
-            #
-            hat_Y_aug = self.predict(X_aug, X_aug)  # vec, flat
-            hat_Y_Np1 += [hat_Y_aug[-1]]
+    return train_scores_
 
-            if_test_param_proto = (
-                -solveh_im(hat_H, self.predictor.K[:, -1].reshape(-1, 1)) / N_train_p1
-            )  # vec, mat
 
-            if_test_pred_proto = np.matmul(self.predictor.K, if_test_param_proto)
+def compute_loss_rho_(dloss, test_prediction):
+    def loss_rho_(output_value):
+        loss_rho = 0.5 * np.abs(
+            dloss(output_value, test_prediction)
+            - dloss(np.zeros(test_prediction.shape), test_prediction)
+        )
+        return loss_rho
 
-            d_loss_Np1_y += [
-                partial_2(self.predictor.loss_bundle["df"], hat_Y_aug[-1].item())
-            ]
+    return loss_rho_
 
-            d_loss_Np1_z += [d_loss_Np1_y[j](Z_test[j, :].item())]
 
-            tilde_Y_y = [
-                add(
-                    mul(d_loss_Np1_y[j], if_test_pred_proto[i, :].item()),
-                    hat_Y_aug[i].item()
-                    - d_loss_Np1_z[j] * if_test_pred_proto[i, :].item(),
-                )
-                for i in range(N_train_p1)
-            ]
+def compute_big_loss_rho_(gram_matrix, lam, loss_beta, loss_rho_):
+    def big_loss_rho_(output_value):
+        big_loss_rho = (
+            1 + (gram_matrix[-1, -1] * loss_beta) / (lam * gram_matrix.shape[0])
+        ) * loss_rho_(output_value)
+        return big_loss_rho
 
-            # Score approximation
-            ncs += [
-                [
-                    comp(
-                        self.non_conformity_bundle["f"],
-                        tilde_Y_y[i],
-                        Y_train[i, :].item(),
-                    )
-                    for i in range(N_train_p1 - 1)
-                ]
-            ]
-            ncs[j] += [comp_2(self.non_conformity_bundle["f"], tilde_Y_y[-1])]
+    return big_loss_rho_
 
-            if self.non_conformity_bundle["lams"]["reg"] != "C0":
-                # Grad score function
-                d_ncs += [
-                    [
-                        comp(
-                            self.non_conformity_bundle["df"],
-                            tilde_Y_y[i],
-                            Y_train[i, :].item(),
-                        )
-                        for i in range(N_train_p1 - 1)
-                    ]
-                ]  # l(l(flat <- func))
 
-                d_ncs[j] += [comp_2(self.non_conformity_bundle["df"], tilde_Y_y[-1])]
+def compute_bigger_loss_rho_(gram_matrix, lam, loss_beta, big_loss_rho_, loss_xi):
+    def bigger_loss_rho_(output_value):
+        bigger_loss_rho = 0.5 * loss_xi * np.sqrt(gram_matrix[-1, -1]) * np.mean(
+            np.diag(gram_matrix) ** (1.5)
+        ) * (big_loss_rho_(output_value) ** 2) + 2 * lam * gram_matrix[
+            -1, -1
+        ] * loss_beta * big_loss_rho_(
+            output_value
+        )
+        return bigger_loss_rho
 
+    return bigger_loss_rho_
+
+# # Just for debugging
+# def compute_predictor_stability_bound_0(gram_matrix, lam, dloss, test_prediction):
+#     def bound(output_value):
+#         loss_rho = 0.5 * np.abs(
+#             dloss(output_value, test_prediction)
+#             - dloss(np.zeros(test_prediction.shape), test_prediction)
+#         )
+#         return np.sqrt(gram_matrix[-1, -1]) * (loss_rho / (lam * gram_matrix.shape[0]))
+#
+#     return bound
+# #
+
+def compute_predictor_stability_bound_(gram_matrix, lam, loss_rho_, bigger_loss_rho_):
+    def predictor_stability_bound_(output_value):
+        predictor_stability_bound = np.sqrt(gram_matrix[-1, -1]) * np.minimum(
+            bigger_loss_rho_(output_value) / ((lam**3) * (gram_matrix.shape[0] ** 2)),
+            2 * loss_rho_(output_value) / (lam * gram_matrix.shape[0]),
+        )
+        return predictor_stability_bound
+
+    return predictor_stability_bound_
+
+
+def compute_scores_stability_bounds_(
+    gram_matrix, non_conformity_rho, predictor_stability_bound_
+):
+    def bounds(output_value):
         return (
-            ncs,
-            K_diag,
-            hat_Y_Np1,
-            d_loss_Np1_y,
-            d_loss_Np1_z,
-            d_ncs,
-            K_diag_3half_mean,
+            np.sqrt(np.diag(gram_matrix))
+            * non_conformity_rho
+            * predictor_stability_bound_(output_value)
         )
 
-    def predictor_qlty_bound(
-        self, K_diag, K_diag_3half_mean, d_loss_Np1_y, d_loss_Np1_z
-    ):
+    return bounds
 
-        N_test = len(K_diag)
-        N_train_p1 = K_diag[0].shape[0]
 
-        rho_1 = [
-            mul(abs_callable(add(d_loss_Np1_y[j], -d_loss_Np1_z[j])), 0.5)
-            for j in range(N_test)
-        ]
-
-        tilde_rho_1 = [
-            mul(
-                rho_1[j],
-                1
-                + (
-                    K_diag[j][-1]
-                    * self.predictor.loss_bundle["lams"]["beta"]
-                    / (
-                        (
-                            self.predictor.lam
-                            * (N_train_p1) ** (-self.predictor.lam_rate)
-                        )
-                        * N_train_p1
-                    )
-                ),
+def compute_approximate_test_prediction_(
+    gram_matrix,
+    dloss,
+    proto_influence,
+    test_prediction,
+):
+    def approximate_test_prediction_(output_value):
+        proto_influence_test_prediction = (
+            gram_matrix[:, -1].reshape(1, -1) @ proto_influence
+        )
+        influence_test_prediction_z = (
+            (-1.0)
+            * proto_influence_test_prediction
+            * (
+                dloss(np.zeros(test_prediction.shape), test_prediction)
+                / gram_matrix.shape[0]
             )
-            for j in range(N_test)
-        ]
-
-        rho_2 = [
-            add(
-                mul(
-                    square_callable(tilde_rho_1[j]),
-                    self.predictor.loss_bundle["lams"]["xi"]
-                    * 0.5
-                    * (K_diag[j][-1] ** 0.5)
-                    * K_diag_3half_mean[j],
-                ),
-                mul(
-                    tilde_rho_1[j],
-                    2
-                    * (self.predictor.lam * (N_train_p1) ** (-self.predictor.lam_rate))
-                    * K_diag[j][-1]
-                    * self.predictor.loss_bundle["lams"]["beta"],
-                ),
-            )
-            for j in range(N_test)
-        ]
-
-        e_ = [
-            min_loc(
-                mul(
-                    rho_2[j],
-                    (K_diag[j][-1] ** 0.5)
-                    / (
-                        (
-                            (
-                                self.predictor.lam
-                                * (N_train_p1) ** (-self.predictor.lam_rate)
-                            )
-                            ** 3
-                        )
-                        * (N_train_p1**2)
-                    ),
-                ),
-                mul(
-                    rho_1[j],
-                    2
-                    * (K_diag[j][-1] ** 0.5)
-                    / (
-                        (
-                            self.predictor.lam
-                            * (N_train_p1) ** (-self.predictor.lam_rate)
-                        )
-                        * N_train_p1
-                    ),
-                ),
-            )
-            for j in range(N_test)
-        ]
-        return e_
-
-    def monitor_ncs_bound(
-        self,
-        K_diag,
-        K_diag_3half_mean,
-        d_loss_Np1_y,
-        d_loss_Np1_z,
-        d_ncs,
-    ):
-        N_test = len(K_diag)
-        N_train_p1 = K_diag[0].shape[0]
-
-        rho_1 = [
-            mul(abs_callable(add(d_loss_Np1_y[j], -d_loss_Np1_z[j])), 0.5)
-            for j in range(N_test)
-        ]
-
-        tilde_rho_1 = [
-            mul(
-                rho_1[j],
-                1
-                + (
-                    K_diag[j][-1]
-                    * self.predictor.loss_bundle["lams"]["beta"]
-                    / (
-                        (
-                            self.predictor.lam
-                            * (N_train_p1) ** (-self.predictor.lam_rate)
-                        )
-                        * N_train_p1
-                    )
-                ),
-            )
-            for j in range(N_test)
-        ]
-
-        rho_2 = [
-            add(
-                mul(
-                    square_callable(tilde_rho_1[j]),
-                    self.predictor.loss_bundle["lams"]["xi"]
-                    * 0.5
-                    * (K_diag[j][-1] ** 0.5)
-                    * K_diag_3half_mean[j],
-                ),
-                mul(
-                    tilde_rho_1[j],
-                    2
-                    * (self.predictor.lam * (N_train_p1) ** (-self.predictor.lam_rate))
-                    * K_diag[j][-1]
-                    * self.predictor.loss_bundle["lams"]["beta"],
-                ),
-            )
-            for j in range(N_test)
-        ]
-
-        if self.non_conformity_bundle["lams"]["reg"] == "C0":
-            alpha = [
-                [self.non_conformity_bundle["lams"]["rho"] for i in range(N_train_p1)]
-                for j in range(N_test)
-            ]
-        else:
-            alpha = [
-                [
-                    add(
-                        abs_callable(d_ncs[j][i]),
-                        mul(
-                            min_loc(
-                                mul(
-                                    rho_2[j],
-                                    1
-                                    / (
-                                        (
-                                            (
-                                                self.predictor.lam
-                                                * (N_train_p1)
-                                                ** (-self.predictor.lam_rate)
-                                            )
-                                            ** 3
-                                        )
-                                        * (N_train_p1**2)
-                                    ),
-                                ),
-                                mul(
-                                    rho_1[j],
-                                    2
-                                    / (
-                                        (
-                                            self.predictor.lam
-                                            * (N_train_p1) ** (-self.predictor.lam_rate)
-                                        )
-                                        * N_train_p1
-                                    ),
-                                ),
-                            ),
-                            (K_diag[j][i] ** 0.5)
-                            * (K_diag[j][-1] ** 0.5)
-                            * self.predictor.loss_bundle["lams"]["beta"],
-                        ),
-                    )
-                    for i in range(N_train_p1)
-                ]
-                for j in range(N_test)
-            ]
-
+        )
+        influence_test_prediction_y = (
+            (-1.0)
+            * proto_influence_test_prediction
+            * (dloss(output_value, test_prediction) / gram_matrix.shape[0])
+        )
         return (
-            tilde_rho_1,
-            rho_2,
-            alpha,
-            self.predictor.loss_bundle["lams"]["beta"],
-            self.predictor.loss_bundle["lams"]["xi"],
+            test_prediction - influence_test_prediction_z + influence_test_prediction_y
         )
 
-    def ncs_qlty_bound(
-        self,
-        K_diag,
-        d_loss_Np1_y,
-        d_loss_Np1_z,
-        d_ncs,
-        K_diag_3half_mean,
-    ):
-        N_test = len(K_diag)
-        N_train_p1 = K_diag[0].shape[0]
+    return approximate_test_prediction_
 
-        rho_1 = [
-            mul(abs_callable(add(d_loss_Np1_y[j], -d_loss_Np1_z[j])), 0.5)
-            for j in range(N_test)
-        ]
 
-        tilde_rho_1 = [
-            mul(
-                rho_1[j],
-                1
-                + (
-                    K_diag[j][-1]
-                    * self.predictor.loss_bundle["lams"]["beta"]
-                    / (
-                        self.predictor.lam
-                        * (N_train_p1) ** (1 - self.predictor.lam_rate)
-                    )
-                ),
-            )
-            for j in range(N_test)
-        ]
-
-        rho_2 = [
-            add(
-                mul(
-                    square_callable(tilde_rho_1[j]),
-                    0.5
-                    * (K_diag[j][-1] ** 0.5)
-                    * K_diag_3half_mean[j]
-                    * self.predictor.loss_bundle["lams"]["xi"],
-                ),
-                mul(
-                    tilde_rho_1[j],
-                    2
-                    * (self.predictor.lam * (N_train_p1) ** (-self.predictor.lam_rate))
-                    * K_diag[j][-1]
-                    * self.predictor.loss_bundle["lams"]["beta"],
-                ),
-            )
-            for j in range(N_test)
-        ]
-
-        if self.non_conformity_bundle["lams"]["reg"] == "C0":
-            tau = [
-                [
-                    mul(
-                        min_loc(
-                            mul(
-                                rho_2[j],
-                                1
-                                / (
-                                    (self.predictor.lam**3)
-                                    * (
-                                        (N_train_p1)
-                                        ** (2 - 3 * self.predictor.lam_rate)
-                                    )
-                                ),
-                            ),
-                            mul(
-                                rho_2[j],
-                                2
-                                / (
-                                    self.predictor.lam
-                                    * (N_train_p1) ** (1 - self.predictor.lam_rate)
-                                ),
-                            ),
-                        ),
-                        (K_diag[j][i] ** 0.5)
-                        * (K_diag[j][-1] ** 0.5)
-                        * self.non_conformity_bundle["lams"]["rho"],
-                    )
-                    for i in range(N_train_p1)
-                ]
-                for j in range(N_test)
-            ]
-        else:
-            alpha = [
-                [
-                    add(
-                        abs_callable(d_ncs[j][i]),
-                        mul(
-                            min_loc(
-                                mul(
-                                    rho_2[j],
-                                    1
-                                    / (
-                                        (self.predictor.lam**3)
-                                        * (
-                                            (N_train_p1)
-                                            ** (2 - 3 * self.predictor.lam_rate)
-                                        )
-                                    ),
-                                ),
-                                mul(
-                                    rho_1[j],
-                                    2
-                                    / (
-                                        self.predictor.lam
-                                        * (N_train_p1) ** (1 - self.predictor.lam_rate)
-                                    ),
-                                ),
-                            ),
-                            (K_diag[j][i] ** 0.5)
-                            * (K_diag[j][-1] ** 0.5)
-                            * self.predictor.loss_bundle["lams"]["beta"],
-                        ),
-                    )
-                    for i in range(N_train_p1)
-                ]
-                for j in range(N_test)
-            ]
-            tau = [
-                [
-                    mul(
-                        alpha[j][i],
-                        mul(
-                            min_loc(
-                                mul(
-                                    rho_2[j],
-                                    1
-                                    / (
-                                        (self.predictor.lam**3)
-                                        * (
-                                            (N_train_p1)
-                                            ** (2 - 3 * self.predictor.lam_rate)
-                                        )
-                                    ),
-                                ),
-                                mul(
-                                    rho_1[j],
-                                    2
-                                    / (
-                                        self.predictor.lam
-                                        * (N_train_p1) ** (1 - self.predictor.lam_rate)
-                                    ),
-                                ),
-                            ),
-                            (K_diag[j][i] ** 0.5) * (K_diag[j][-1] ** 0.5),
-                        ),
-                    )
-                    for i in range(N_train_p1)
-                ]
-                for j in range(N_test)
-            ]
-
-        return tau
-
-    def thickness_bound_explicit(self, K_diag):
-
-        N_train_p1 = K_diag[0].shape[0]
-
-        diag_maxes = [diag.max() for diag in K_diag]
-        # print([type(diag) for diag in diag_maxes])
-        facts = [
+def compute_upper_p_value_(
+    train_scores_,
+    scores_stability_bounds_,
+    non_conformity,
+    approximate_test_prediction_,
+):
+    def upper_p_value_(output_value):
+        approximate_test_prediction = approximate_test_prediction_(output_value)
+        scores_stability_bounds = scores_stability_bounds_(output_value)
+        upper_train_scores = train_scores_(output_value) + scores_stability_bounds[:-1]
+        p_value = (
             1
-            + (
-                (diag_max * self.predictor.loss_bundle["lams"]["beta"])
-                / ((self.predictor.lam * (N_train_p1) ** (1 - self.predictor.lam_rate)))
-            )
-            for diag_max in diag_maxes
-        ]
-
-        ms = [
-            0.5
-            * (diag_max**2)
-            * (fact**2)
-            * (self.predictor.loss_bundle["lams"]["rho"] ** 2)
-            * self.predictor.loss_bundle["lams"]["xi"]
-            + (
-                2
-                * (self.predictor.lam * (N_train_p1) ** (-self.predictor.lam_rate))
-                * diag_max
-                * self.predictor.loss_bundle["lams"]["beta"]
-                * fact
-                * self.predictor.loss_bundle["lams"]["rho"]
-            )
-            for diag_max, fact in zip(diag_maxes, facts)
-        ]
-
-        bounds = [
-            (
-                12
-                * diag_max
-                / (
-                    1
-                    - (
-                        (diag_max * self.predictor.loss_bundle["lams"]["beta"])
-                        / (
-                            self.predictor.lam
-                            * (N_train_p1) ** (1 - self.predictor.lam_rate)
-                        )
-                    )
+            + np.sum(
+                upper_train_scores
+                >= (
+                    non_conformity(output_value, approximate_test_prediction)
+                    - scores_stability_bounds[-1]
                 )
             )
-            * min(
-                m
-                / (
-                    (self.predictor.lam**3)
-                    * (N_train_p1) ** (2 - 3 * self.predictor.lam_rate)
-                ),
-                (2 * self.predictor.loss_bundle["lams"]["rho"])
-                / (self.predictor.lam * (N_train_p1) ** (1 - self.predictor.lam_rate)),
+        ) / (upper_train_scores.shape[0] + 1)
+        return p_value
+
+    return upper_p_value_
+
+
+def compute_lower_p_value_(
+    train_scores_,
+    scores_stability_bounds_,
+    non_conformity,
+    approximate_test_prediction_,
+):
+
+    def lower_p_value_(output_value):
+        approximate_test_prediction = approximate_test_prediction_(output_value)
+        scores_stability_bounds = scores_stability_bounds_(output_value)
+        lower_train_scores = train_scores_(output_value) - scores_stability_bounds[:-1]
+        p_value = (
+            1
+            + np.sum(
+                lower_train_scores
+                >= (
+                    non_conformity(output_value, approximate_test_prediction)
+                    + scores_stability_bounds[-1]
+                )
             )
-            for diag_max, m in zip(diag_maxes, ms)
-        ]
+        ) / (lower_train_scores.shape[0] + 1)
+        return p_value
 
-        return bounds
+    return lower_p_value_
 
-    def corr_ncs_up(
-        self,
-        ncs,
-        ncs_qlty_bounds,
+
+class InfluenceFunctionConformalPredictor:
+    def __init__(
+        self, predictor, non_conformity_name="absolute", non_conformity_params={}
     ):
-        N_train = len(ncs_qlty_bounds[0]) - 1
-        return [
-            [
-                add(score[i], bound[i]) if i < N_train else sub(score[i], bound[i])
-                for i in range(N_train + 1)
-            ]
-            for score, bound in zip(ncs, ncs_qlty_bounds)
-        ]
+        self.name = "influence_function_cp"
+        self.predictor = predictor
+        non_conformity_ = maker(non_conformity_name)(**non_conformity_params)
+        self.non_conformity = non_conformity_["f"]
+        self.non_conformity_lams = non_conformity_["lams"]
 
-    def corr_ncs_lo(
-        self,
-        ncs,
-        ncs_qlty_bounds,
-    ):
-        N_train = len(ncs_qlty_bounds[0]) - 1
-        return [
-            [
-                sub(score[i], bound[i]) if i < N_train else add(score[i], bound[i])
-                for i in range(N_train + 1)
-            ]
-            for score, bound in zip(ncs, ncs_qlty_bounds)
-        ]
+        loss_ = maker(self.predictor.loss_name)(**self.predictor.loss_params)
+        self.dloss = loss_["df"]
+        self.loss_lams = loss_["lams"]
 
-    def region(self, X_train, Y_train, X_test, Z_test, params):
-
-        # Compute the regularity coefficients
-        y_max = np.max(Y_train.flatten()).item()
-        y_min = np.min(Y_train.flatten()).item()
-
-        (
-            ncs,
-            K_diag,
-            hat_Y_Np1,
-            d_loss_Np1_y,
-            d_loss_Np1_z,
-            d_ncs,
-            K_diag_3half_mean,
-        ) = self._ncs_(X_train, Y_train, X_test, Z_test, params)
-
-        tau = self.ncs_qlty_bound(
-            K_diag, d_loss_Np1_y, d_loss_Np1_z, d_ncs, K_diag_3half_mean
+        empirical_risk = KernelEmpiricalRisk(
+            self.predictor.loss_name, self.predictor.loss_params
         )
+        self.gradient_hessian = empirical_risk.gradient_hessian
 
-        corrected_ncs_up = self.corr_ncs_up(ncs, tau)
-        p_value_function_up = p_value_maker(corrected_ncs_up)
-        region_up = region_maker(p_value_function_up, y_min, y_max, hat_Y_Np1)
+    def fit_predict(self, train_input_points, train_output_points, test_input_points):
+        """
+        Prediction region function (as a function of the confidence level)
+        for each test input point
+        """
 
-        corrected_ncs_low = self.corr_ncs_lo(ncs, tau)
-        p_value_function_low = p_value_maker(corrected_ncs_low)
-        region_low = region_maker(p_value_function_low, y_min, y_max, hat_Y_Np1)
+        def region_predictor(confidence_control_level):
+            prediction_regions = []
+            for test_input_point in test_input_points:
+                augmented_input_points = np.concatenate(
+                    (train_input_points, test_input_point.reshape(1, -1))
+                )
+                augmented_output_points = np.concatenate(
+                    (train_output_points, np.zeros((1, train_output_points.shape[1])))
+                )
 
-        return {
-            "up": {
-                "region": region_up,
-                "p_value_function": p_value_function_up,
-            },
-            "low": {"region": region_low, "p_value_function": p_value_function_low},
-        }
+                self.predictor.fit(augmented_input_points, augmented_output_points)
+                predictions = self.predictor.predict(augmented_input_points)
+
+                gram_matrix = self.predictor._get_kernel(augmented_input_points)
+                _, hessian = self.gradient_hessian(
+                    self.predictor.model_weights,
+                    gram_matrix,
+                    augmented_output_points,
+                    self.predictor.lam,
+                )
+                proto_influence, _, _, _ = np.linalg.lstsq(
+                    hessian, gram_matrix[:, -1].reshape(-1, 1)
+                )
+                approximate_predictions_ = compute_approximate_predictions_(
+                    gram_matrix, self.dloss, proto_influence, predictions
+                )
+
+                train_scores_ = compute_train_scores_(
+                    self.non_conformity, train_output_points, approximate_predictions_
+                )
+
+                loss_rho_ = compute_loss_rho_(self.dloss, predictions[-1, :])
+                big_loss_rho_ = compute_big_loss_rho_(
+                    gram_matrix, self.predictor.lam, self.loss_lams["beta"], loss_rho_
+                )
+                bigger_loss_rho_ = compute_bigger_loss_rho_(
+                    gram_matrix,
+                    self.predictor.lam,
+                    self.loss_lams["beta"],
+                    big_loss_rho_,
+                    self.loss_lams["xi"],
+                )
+                
+                predictor_stability_bound_ = compute_predictor_stability_bound_(
+                    gram_matrix, self.predictor.lam, loss_rho_, bigger_loss_rho_
+                )          
+
+                scores_stability_bounds_ = compute_scores_stability_bounds_(
+                    gram_matrix,
+                    self.non_conformity_lams["rho"],
+                    predictor_stability_bound_,
+                )
+
+                output_min = np.min(train_output_points)
+                output_max = np.max(train_output_points)
+
+                # # Just for debugging
+                # ys = np.linspace(output_min, output_max, 100)
+                # fig, ax = plt.subplots()
+                # ax.plot(ys, loss_rho_(ys), label = "loss_rho")
+                # ax.plot(ys, big_loss_rho_(ys), label = "big_loss_rho")
+                # ax.plot(ys, bigger_loss_rho_(ys), label = "bigger_loss_rho")
+                # ax.legend()
+                # fig.show()
+
+
+                # predictor_stability_bound_0 = compute_predictor_stability_bound_0(
+                #     gram_matrix, self.predictor.lam, self.dloss, predictions[-1, :]
+                # )
+                # ys = np.linspace(output_min, output_max, 100)
+                # fig, ax = plt.subplots()
+                # ax.plot(ys, predictor_stability_bound_(ys), label = "infunc")
+                # ax.plot(ys, predictor_stability_bound_0(ys), label = "stable")
+                # ax.legend()
+                # fig.show()
+                # #
+
+                approximate_test_prediction_ = compute_approximate_test_prediction_(
+                    gram_matrix, self.dloss, proto_influence, predictions[-1, :]
+                )
+
+                upper_p_value_ = compute_upper_p_value_(
+                    train_scores_,
+                    scores_stability_bounds_,
+                    self.non_conformity,
+                    approximate_test_prediction_,
+                )
+                upper_prediction_region = inter_finder(
+                    lambda output_value: (
+                        upper_p_value_(output_value) - confidence_control_level
+                    ),
+                    output_min,
+                    output_max,
+                    predictions[-1, :],
+                )
+
+                lower_p_value_ = compute_lower_p_value_(
+                    train_scores_,
+                    scores_stability_bounds_,
+                    self.non_conformity,
+                    approximate_test_prediction_,
+                )
+                lower_prediction_region = inter_finder(
+                    lambda output_value: (
+                        lower_p_value_(output_value) - confidence_control_level
+                    ),
+                    output_min,
+                    output_max,
+                    predictions[-1, :],
+                )
+
+                prediction_regions.append(
+                    {"upper": upper_prediction_region, "lower": lower_prediction_region}
+                )
+
+            return prediction_regions
+
+        return region_predictor

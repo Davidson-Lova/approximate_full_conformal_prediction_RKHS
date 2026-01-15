@@ -1,4 +1,4 @@
-"""The purpose of the present module is to build prediction sets using conformal prediction for kernel ridge regression.
+"""The purpose of the present module is to build prediction sets using local stable conformal prediction for kernel ridge regression.
 
 It should be able to be used as follows:
 ```
@@ -17,12 +17,11 @@ prediction_regions = region_predictor(confidence_control_level)
 """
 
 import numpy as np
-import portion as P
 from ..models.losses import maker
 from .utils import inter_finder
 
 
-def commpute_predictor_stability_bound_(gram_matrix, lam, dloss, test_prediction):
+def compute_predictor_stability_bound_(gram_matrix, lam, dloss, test_prediction):
     def bound(output_value):
         loss_rho = 0.5 * np.abs(
             dloss(output_value, test_prediction)
@@ -61,7 +60,7 @@ def compute_upper_p_value_(
                     - scores_stability_bounds[-1]
                 )
             )
-        ) / (train_scores.shape[0] + 1)
+        ) / (upper_train_scores.shape[0] + 1)
         return p_value
 
     return upper_p_value_
@@ -83,7 +82,7 @@ def compute_lower_p_value_(
                     + scores_stability_bounds[-1]
                 )
             )
-        ) / (train_scores.shape[0] + 1)
+        ) / (lower_train_scores.shape[0] + 1)
         return p_value
 
     return lower_p_value_
@@ -127,7 +126,7 @@ class StableConformalPredictor:
                 ).flatten()
 
                 gram_matrix = self.predictor._get_kernel(augmented_input_points)
-                predictor_stability_bound_ = commpute_predictor_stability_bound_(
+                predictor_stability_bound_ = compute_predictor_stability_bound_(
                     gram_matrix, self.predictor.lam, self.dloss, predictions[-1, :]
                 )
                 scores_stability_bounds_ = compute_scores_stability_bounds_(
