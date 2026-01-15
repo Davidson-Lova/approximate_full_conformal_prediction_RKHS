@@ -1,5 +1,6 @@
 """
 The purpose of the present module is to build prediction sets using split conformal prediction provided a predictor.
+It should support the APS and RAPS non-conformity scores.
 
 It should be able to be used as follows:
 ```
@@ -24,17 +25,16 @@ import portion as P
 from scipy.optimize import minimize_scalar, root_scalar
 from sklearn.model_selection import train_test_split
 
+from .base_cp import cp
 
-class SplitConformalPredictor():
+
+class scp(cp):
     def __init__(
-        self, model, non_conformity_name, non_conformity_params
+        self, predictor, non_conformity_maker, non_conformity_params, proper_train_size
     ):
+        super().__init__(predictor, non_conformity_maker, non_conformity_params)
         self.name = "scp"
-        self.model = model
-        non_conformity_ = maker(non_conformity_name)(**non_conformity_params)
-        self.non_conformity = non_conformity_["f"]
-        self.dnon_conformity = non_conformity_["df"]
-        self.d2non_conformity = non_conformity_["ddf"]
+        self.proper_train_size = proper_train_size
 
     def _ncs_(self, X_train, Y_train, X_test, Y_test, params):
         # Train a predictor over training data

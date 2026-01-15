@@ -110,12 +110,12 @@ class approx_fcp_1(cp):
     #     ]
 
     #     if self.non_conformity_bundle["lams"]["reg"] == "C0":
-    #         gamma = [
+    #         alpha = [
     #             [self.non_conformity_bundle["lams"]["rho"] for i in range(N_train_p1)]
     #             for j in range(N_test)
     #         ]
     #     else:
-    #         _gamma = [
+    #         _alpha = [
     #             [
     #                 add(
     #                     mul(
@@ -134,8 +134,8 @@ class approx_fcp_1(cp):
     #             for j in range(N_test)
     #         ]
 
-    #         gamma = [
-    #             _gamma[j]
+    #         alpha = [
+    #             _alpha[j]
     #             + [
     #                 add(
     #                     mul(
@@ -155,7 +155,7 @@ class approx_fcp_1(cp):
     #         self.predictor.lam * (N_train_p1**-self.predictor.lam_rate),
     #         [1 / (lam * N_train_p1) for lam in lams],
     #         [1 / ((lam**3) * (N_train_p1**2)) for lam in lams],
-    #         gamma,
+    #         alpha,
     #     )
 
     def ncs_qlty_bound_0(self, K_diag):
@@ -205,7 +205,7 @@ class approx_fcp_1(cp):
                 for j in range(N_test)
             ]
         else:
-            _gamma = [
+            _alpha = [
                 [
                     add(
                         mul(
@@ -227,8 +227,8 @@ class approx_fcp_1(cp):
                 for j in range(N_test)
             ]
 
-            gamma = [
-                _gamma[j]
+            alpha = [
+                _alpha[j]
                 + [
                     add(
                         mul(
@@ -248,7 +248,7 @@ class approx_fcp_1(cp):
             tau = [
                 [
                     mul(
-                        gamma[j][i],
+                        alpha[j][i],
                         mul(
                             rho_1[j],
                             ((K_diag[j][i] ** 0.5) * (K_diag[j][-1] ** 0.5))

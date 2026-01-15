@@ -31,9 +31,8 @@ def compute_grad_emp_risk(dloss, output_points, predictions, gram_matrix, lam):
 
 
 class KernelEmpiricalRisk:
-    def __init__(self, loss_name="log_cosh", loss_params={"gamma": 1.0}):
+    def __init__(self, loss_name="log_cosh", loss_params={"alpha": 1.0}):
         self.loss_name = loss_name
-        print(self.loss_name)
         loss_ = maker(loss_name)(**loss_params)
         self.loss = loss_["f"]
         self.dloss = loss_["df"]

@@ -255,12 +255,12 @@ class approx_fcp_2(cp):
         ]
 
         if self.non_conformity_bundle["lams"]["reg"] == "C0":
-            gamma = [
+            alpha = [
                 [self.non_conformity_bundle["lams"]["rho"] for i in range(N_train_p1)]
                 for j in range(N_test)
             ]
         else:
-            gamma = [
+            alpha = [
                 [
                     add(
                         abs_callable(d_ncs[j][i]),
@@ -306,7 +306,7 @@ class approx_fcp_2(cp):
         return (
             tilde_rho_1,
             rho_2,
-            gamma,
+            alpha,
             self.predictor.loss_bundle["lams"]["beta"],
             self.predictor.loss_bundle["lams"]["xi"],
         )
@@ -397,7 +397,7 @@ class approx_fcp_2(cp):
                 for j in range(N_test)
             ]
         else:
-            gamma = [
+            alpha = [
                 [
                     add(
                         abs_callable(d_ncs[j][i]),
@@ -435,7 +435,7 @@ class approx_fcp_2(cp):
             tau = [
                 [
                     mul(
-                        gamma[j][i],
+                        alpha[j][i],
                         mul(
                             min_loc(
                                 mul(

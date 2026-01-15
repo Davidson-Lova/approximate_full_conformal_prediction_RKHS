@@ -10,7 +10,7 @@
     "predictor": {
         "loss": {
             "name": "log_cosh",
-            "params": {"gamma":1,"dmax": 5}
+            "params": {"alpha":1,"dmax": 5}
         },
         "kernel": {
             "name": "polynomial",

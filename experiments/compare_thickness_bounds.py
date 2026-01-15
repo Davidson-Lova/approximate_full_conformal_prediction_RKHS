@@ -244,11 +244,11 @@ def name_maker(name, col, rate):
     res = r""
     if col == "confidence_gap":
         if name == "approx_fcp_0":
-            res += r"$\Delta^{(0)}$"
+            res += r"$\alpha^{(0)}$"
         elif name == "approx_fcp_1":
-            res += r"$\Delta^{(1)}$"
+            res += r"$\alpha^{(1)}$"
         elif name == "approx_fcp_2":
-            res += r"$\Delta^{(2)}$"
+            res += r"$\alpha^{(2)}$"
     elif col == "upper_bound":
         if name == "approx_fcp_0":
             res += r"$Eq.(14)$"

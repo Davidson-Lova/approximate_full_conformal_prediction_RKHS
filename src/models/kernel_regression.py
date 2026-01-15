@@ -13,12 +13,12 @@ from .kernel_empirical_risk import KernelEmpiricalRisk
 def solve_kernel_regression(
     gram_matrix,
     output_points,
-    lam=0.1,
+    lam=0.5,
     solver="newton-cg",
     max_iter=200,
     tol=1e-4,
     loss_name="log_cosh",
-    loss_params={"gamma": 1.0},
+    loss_params={"alpha": 1.0},
 ):
 
 
@@ -73,11 +73,11 @@ class KernelRegression:
 
     def __init__(
         self,
-        lam=0.1,
+        lam=0.5,
         kernel="linear",
         loss_name="log_cosh",
-        loss_params={"gamma": 1.0},
-        gamma=None,
+        loss_params={"alpha": 1.0},
+        alpha=None,
         degree=3.0,
         coef0=1.0,
         kernel_params=None,
@@ -91,7 +91,7 @@ class KernelRegression:
         self.kernel = kernel
         self.loss_name = loss_name
         self.loss_params = loss_params
-        self.gamma = gamma
+        self.alpha = alpha
         self.degree = degree
         self.coef0 = coef0
         self.kernel_params = kernel_params
@@ -108,7 +108,7 @@ class KernelRegression:
             params = self.kernel_params or {}
         else:
             params = {
-                "gamma": self.gamma,
+                "alpha": self.alpha,
                 "degree": self.degree,
                 "coef0": self.coef0,
             }

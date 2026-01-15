@@ -59,29 +59,29 @@ def quadratic_maker(dmax=5):
     }
 
 
-def huber_score(targets, predictions, delta=1):
+def huber_score(targets, predictions, alpha=1):
     resid = sub(targets, predictions)
-    return spsp.huber(delta, resid)
+    return spsp.huber(alpha, resid)
 
 
-def pseudo_huber_maker(delta=1.0, dmax=5):
+def pseudo_huber_maker(alpha=1.0, dmax=5):
 
     def pseudo_huber(x):
-        return (delta**2) * (np.sqrt(np.power(x / delta, 2) + 1) - 1)
+        return (alpha**2) * (np.sqrt(np.power(x / alpha, 2) + 1) - 1)
 
     def pseudo_huber_score(targets, predictions):
         resid = sub(targets, predictions)
         return pseudo_huber(resid)
 
     def diff_pseudo_huber(x):
-        return x / np.sqrt(np.power(x / delta, 2) + 1)
+        return x / np.sqrt(np.power(x / alpha, 2) + 1)
 
     def diff_pseudo_huber_score(targets, predictions):
         resid = sub(targets, predictions)
         return -diff_pseudo_huber(resid)
 
     def diff2_pseudo_huber(x):
-        return 1 / np.power(np.power(x / delta, 2) + 1, 3 / 2)
+        return 1 / np.power(np.power(x / alpha, 2) + 1, 3 / 2)
 
     def diff2_pseudo_huber_score(targets, predictions):
         resid = sub(targets, predictions)
@@ -89,7 +89,7 @@ def pseudo_huber_maker(delta=1.0, dmax=5):
 
     score_lams = {
         "beta": 1,
-        "xi": (1.5 * ((4 / 5) ** 2.5)) * (delta**-1),
+        "xi": (1.5 * ((4 / 5) ** 2.5)) * (alpha**-1),
         "eta": diff2_pseudo_huber(dmax),
         "rho": 1,
         "reg": "C2",
@@ -103,27 +103,27 @@ def pseudo_huber_maker(delta=1.0, dmax=5):
     }
 
 
-def log_cosh_maker(gamma=1, dmax=5):
+def log_cosh_maker(alpha=1, dmax=5):
     def log_cosh_score(targets, predictions):
         resid = sub(targets, predictions)
-        return gamma * logcosh(resid / gamma)
+        return alpha * logcosh(resid / alpha)
 
     def diff_log_cosh_score(targets, predictions):
         resid = sub(targets, predictions)
-        return -np.tanh(resid / gamma)
+        return -np.tanh(resid / alpha)
 
     def diff2_log_cosh_score(targets, predictions):
         resid = sub(targets, predictions)
-        res = np.exp(-2 * logcosh(resid / gamma)) / gamma
+        res = np.exp(-2 * logcosh(resid / alpha)) / alpha
         return res
 
     def diff3_log_cosh(x):
-        return -2 * np.tanh(x / gamma) * np.exp(-2 * logcosh(x / gamma))
+        return -2 * np.tanh(x / alpha) * np.exp(-2 * logcosh(x / alpha))
 
-    c = -np.arcsinh(np.sqrt(2) ** -1) * gamma
+    c = -np.arcsinh(np.sqrt(2) ** -1) * alpha
 
     score_lams = {
-        "beta": 1 / gamma,
+        "beta": 1 / alpha,
         "xi": diff3_log_cosh(c),
         "eta": diff2_log_cosh_score(dmax, 0),
         "rho": 1,

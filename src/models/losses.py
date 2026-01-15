@@ -10,10 +10,21 @@ def sub(targets, predictions):
     return targets - predictions
 
 
-def huber_loss(targets, predictions, delta=1):
+def huber_loss(targets, predictions, alpha=1):
     resid = sub(targets, predictions)
-    return spsp.huber(delta, resid)
+    return spsp.huber(alpha, resid)
 
+def absolute_maker():
+    def absolute_loss(targets, predictions):
+        resid = sub(targets, predictions)
+        return np.abs(resid)
+
+    score_lams = {"rho": 1, "reg": "C0"}
+
+    return {
+        "f": absolute_loss,
+        "lams": score_lams,
+    }
 
 def quadratic_maker(dmax=5.0):
     def quadratic_loss(targets, predictions):
@@ -43,24 +54,24 @@ def quadratic_maker(dmax=5.0):
     }
 
 
-def pseudo_huber_maker(delta=1.0):
+def pseudo_huber_maker(alpha=1.0):
 
     def pseudo_huber(x):
-        return (delta**2) * (np.sqrt(np.power(x / delta, 2) + 1) - 1)
+        return (alpha**2) * (np.sqrt(np.power(x / alpha, 2) + 1) - 1)
 
     def pseudo_huber_loss(targets, predictions):
         resid = sub(targets, predictions)
         return pseudo_huber(resid)
 
     def diff_pseudo_huber(x):
-        return x / np.sqrt(np.power(x / delta, 2) + 1)
+        return x / np.sqrt(np.power(x / alpha, 2) + 1)
 
     def diff_pseudo_huber_loss(targets, predictions):
         resid = sub(targets, predictions)
         return -diff_pseudo_huber(resid)
 
     def diff2_pseudo_huber(x):
-        return 1 / np.power(np.power(x / delta, 2) + 1, 3 / 2)
+        return 1 / np.power(np.power(x / alpha, 2) + 1, 3 / 2)
 
     def diff2_pseudo_huber_loss(targets, predictions):
         resid = sub(targets, predictions)
@@ -68,9 +79,9 @@ def pseudo_huber_maker(delta=1.0):
 
     loss_lams = {
         "beta": 1,
-        "xi": (1.5 * ((4 / 5) ** 2.5)) * (delta**-1),
+        "xi": (1.5 * ((4 / 5) ** 2.5)) * (alpha**-1),
         "eta": 0,
-        "rho": 1,
+        "rho": alpha,
     }
 
     return {
@@ -87,29 +98,28 @@ def logcosh(x):
     p = np.exp(-2 * s)
     return s + np.log1p(p) - np.log(2)
 
+def sech2(x):
+    return np.exp(-2 * logcosh(x))
 
-def log_cosh_maker(gamma=1):
+def log_cosh_maker(alpha=1):
     def log_cosh_loss(targets, predictions):
         resid = sub(targets, predictions)
-        return gamma * logcosh(resid / gamma)
+        return alpha * logcosh(resid / alpha)
 
     def diff_log_cosh_loss(targets, predictions):
         resid = sub(targets, predictions)
-        return -np.tanh(resid / gamma)
+        return -np.tanh(resid / alpha)
 
     def diff2_log_cosh_loss(targets, predictions):
         resid = sub(targets, predictions)
-        res = np.exp(-2 * logcosh(resid / gamma)) / gamma
+        res = np.exp(-2 * logcosh(resid / alpha)) / alpha
         return res
 
-    def diff3_log_cosh(x):
-        return -2 * np.tanh(x / gamma) * np.exp(-2 * logcosh(x / gamma))
-
-    c = -np.arcsinh(np.sqrt(2) ** -1) * gamma
+    c = -np.arcsinh(np.sqrt(2) ** -1) * alpha
 
     loss_lams = {
-        "beta": 1 / gamma,
-        "xi": diff3_log_cosh(c),
+        "beta": 1 / alpha,
+        "xi": 2 * np.tanh(np.arcsinh(np.sqrt(2) ** -1)) * sech2(np.arcsinh(np.sqrt(2) ** -1)) / alpha**2,
         "eta": 0,
         "rho": 1,
     }
@@ -197,6 +207,8 @@ def linex_maker(alpha=1):
 
 
 def maker(name):
+    if name == "absolute":
+        return absolute_maker
     if name == "quadratic":
         return quadratic_maker
     elif name == "pseudo_huber":
