@@ -3,7 +3,7 @@
 import numpy as np
 
 from .base_cp import cp
-from .utils.utils import (
+from .utils import (
     abs_callable,
     add,
     comp,

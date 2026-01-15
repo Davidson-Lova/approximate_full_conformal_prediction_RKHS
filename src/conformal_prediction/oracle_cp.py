@@ -66,7 +66,9 @@ class OracleConformalPredictor:
                 predictions = self.predictor.predict(augmented_input_points)
                 scores = self.non_conformity(augmented_output_points, predictions)
 
-                quantile_value = np.quantile(scores, 1 - confidence_control_level, method="higher")
+                quantile_value = np.quantile(
+                    scores, 1 - confidence_control_level, method="higher"
+                )
 
                 prediction_regions.append(
                     P.closed(

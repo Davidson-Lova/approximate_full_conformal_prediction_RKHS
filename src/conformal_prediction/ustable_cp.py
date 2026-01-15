@@ -74,38 +74,44 @@ class UStableConformalPredictor:
                     gram_matrix, self.predictor.lam, self.loss_lams["rho"]
                 )
                 scores_stability_bounds = compute_scores_stability_bounds(
-                    gram_matrix, self.non_conformity_lams["rho"], predictor_stability_bound
+                    gram_matrix,
+                    self.non_conformity_lams["rho"],
+                    predictor_stability_bound,
                 )
 
                 quantile_level = np.ceil(
                     (gram_matrix.shape[0]) * (1 - confidence_control_level)
                 ) / (gram_matrix.shape[0] - 1)
 
-                upper_train_scores = train_scores + scores_stability_bounds[:-1] 
+                upper_train_scores = train_scores + scores_stability_bounds[:-1]
                 upper_quantile_value = np.quantile(
                     upper_train_scores, quantile_level, method="higher"
                 )
                 upper_prediction_region = P.closed(
-                    predictions[-1, :] - upper_quantile_value - scores_stability_bounds[-1],
-                    predictions[-1, :] + upper_quantile_value + scores_stability_bounds[-1]
+                    predictions[-1, :]
+                    - upper_quantile_value
+                    - scores_stability_bounds[-1],
+                    predictions[-1, :]
+                    + upper_quantile_value
+                    + scores_stability_bounds[-1],
                 )
-                
-                lower_train_scores = train_scores - scores_stability_bounds[:-1] 
+
+                lower_train_scores = train_scores - scores_stability_bounds[:-1]
                 lower_quantile_value = np.quantile(
                     lower_train_scores, quantile_level, method="higher"
                 )
                 lower_prediction_region = P.closed(
-                    predictions[-1, :] - lower_quantile_value + scores_stability_bounds[-1],
-                    predictions[-1, :] + lower_quantile_value - scores_stability_bounds[-1]
+                    predictions[-1, :]
+                    - lower_quantile_value
+                    + scores_stability_bounds[-1],
+                    predictions[-1, :]
+                    + lower_quantile_value
+                    - scores_stability_bounds[-1],
                 )
 
                 prediction_regions.append(
-                    {
-                        "upper":upper_prediction_region,
-                        "lower":lower_prediction_region
-                    }
+                    {"upper": upper_prediction_region, "lower": lower_prediction_region}
                 )
             return prediction_regions
 
         return region_predictor
-    
