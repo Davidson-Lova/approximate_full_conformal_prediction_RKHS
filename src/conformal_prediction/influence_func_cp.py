@@ -93,6 +93,7 @@ def compute_bigger_loss_rho_(gram_matrix, lam, loss_beta, big_loss_rho_, loss_xi
 
     return bigger_loss_rho_
 
+
 # # Just for debugging
 # def compute_predictor_stability_bound_0(gram_matrix, lam, dloss, test_prediction):
 #     def bound(output_value):
@@ -104,6 +105,7 @@ def compute_bigger_loss_rho_(gram_matrix, lam, loss_beta, big_loss_rho_, loss_xi
 #
 #     return bound
 # #
+
 
 def compute_predictor_stability_bound_(gram_matrix, lam, loss_rho_, bigger_loss_rho_):
     def predictor_stability_bound_(output_value):
@@ -277,10 +279,10 @@ class InfluenceFunctionConformalPredictor:
                     big_loss_rho_,
                     self.loss_lams["xi"],
                 )
-                
+
                 predictor_stability_bound_ = compute_predictor_stability_bound_(
                     gram_matrix, self.predictor.lam, loss_rho_, bigger_loss_rho_
-                )          
+                )
 
                 scores_stability_bounds_ = compute_scores_stability_bounds_(
                     gram_matrix,
@@ -299,7 +301,6 @@ class InfluenceFunctionConformalPredictor:
                 # ax.plot(ys, bigger_loss_rho_(ys), label = "bigger_loss_rho")
                 # ax.legend()
                 # fig.show()
-
 
                 # predictor_stability_bound_0 = compute_predictor_stability_bound_0(
                 #     gram_matrix, self.predictor.lam, self.dloss, predictions[-1, :]
