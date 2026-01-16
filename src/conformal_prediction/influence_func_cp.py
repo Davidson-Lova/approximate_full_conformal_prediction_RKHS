@@ -212,6 +212,44 @@ def compute_lower_p_value_(
     return lower_p_value_
 
 
+def compute_big_loss_rho_bound(kernel_max, lam, sample_size_p1, loss_beta, loss_rho):
+    return (1 + (kernel_max * loss_beta) / (lam * sample_size_p1)) * loss_rho
+
+
+def compute_bigger_loss_rho_bound(
+    kernel_max, lam, loss_beta, big_loss_rho_bound, loss_xi
+):
+    return (
+        0.5 * loss_xi * (kernel_max**2) * (big_loss_rho_bound**2)
+        + 2 * lam * kernel_max * loss_beta * big_loss_rho_bound
+    )
+
+
+def compute_scores_stability_bound(
+    kernel_max, lam, sample_size_p1, loss_rho, bigger_loss_rho_bound
+):
+    return kernel_max * np.minimum(
+        bigger_loss_rho_bound / ((lam**3) * (sample_size_p1**2)),
+        2 * loss_rho / (lam * sample_size_p1),
+    )
+
+
+def compute_crude_thickness_upper_bound(
+    kernel_max, lam, sample_size_p1, loss_rho, scores_stability_bound
+):
+    return 8 * (
+        scores_stability_bound + (kernel_max * loss_rho / (lam * sample_size_p1))
+    )
+
+
+def compute_thicknes_upper_bound(
+    kernel_max, lam, sample_size_p1, loss_beta, scores_stability_bound
+):
+    return (
+        12 / (1 - (loss_beta * kernel_max / (lam * sample_size_p1)))
+    ) * scores_stability_bound
+
+
 class InfluenceFunctionConformalPredictor:
     def __init__(
         self, predictor, non_conformity_name="absolute", non_conformity_params={}
@@ -354,3 +392,62 @@ class InfluenceFunctionConformalPredictor:
             return prediction_regions
 
         return region_predictor
+
+    def thickness_upper_bound(self, train_input_points, test_input_points):
+        """
+        Computes theoretical upper bound on the thickness
+        """
+        upper_bounds = []
+        for test_input_point in test_input_points:
+            augmented_input_points = np.concatenate(
+                (train_input_points, test_input_point.reshape(1, -1))
+            )
+            gram_matrix = self.predictor._get_kernel(augmented_input_points)
+
+            kernel_max = np.max(np.diag(gram_matrix))
+            sample_size_p1 = gram_matrix.shape[0]
+
+            big_loss_rho_bound = compute_big_loss_rho_bound(
+                kernel_max,
+                self.predictor.lam,
+                sample_size_p1,
+                self.loss_lams["beta"],
+                self.loss_lams["rho"],
+            )
+            bigger_loss_rho_bound = compute_bigger_loss_rho_bound(
+                kernel_max,
+                self.predictor.lam,
+                self.loss_lams["beta"],
+                big_loss_rho_bound,
+                self.loss_lams["xi"],
+            )
+            scores_stability_bound = compute_scores_stability_bound(
+                kernel_max,
+                self.predictor.lam,
+                sample_size_p1,
+                self.loss_lams["rho"],
+                bigger_loss_rho_bound,
+            )
+
+            if (self.predictor.lam * sample_size_p1) <= (
+                kernel_max * self.loss_lams["beta"] * 0.5
+            ):
+                upper_bound = compute_crude_thickness_upper_bound(
+                    kernel_max,
+                    self.predictor.lam,
+                    sample_size_p1,
+                    self.loss_lams["rho"],
+                    scores_stability_bound,
+                )
+            else:
+                upper_bound = compute_thicknes_upper_bound(
+                    kernel_max,
+                    self.predictor.lam,
+                    sample_size_p1,
+                    self.loss_lams["beta"],
+                    scores_stability_bound,
+                )
+
+            upper_bounds.append(upper_bound)
+
+        return upper_bounds
