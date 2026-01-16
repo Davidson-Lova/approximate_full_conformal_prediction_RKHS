@@ -33,6 +33,10 @@ def compute_scores_stability_bounds(
     )
 
 
+def compute_thickness_upper_bound(gram_matrix, lam, loss_rho):
+    return (8 * loss_rho * np.max(np.diag(gram_matrix))) / (lam * gram_matrix.shape[0])
+
+
 class UStableConformalPredictor:
     def __init__(
         self, predictor, non_conformity_name="absolute", non_conformity_params={}
@@ -115,3 +119,20 @@ class UStableConformalPredictor:
             return prediction_regions
 
         return region_predictor
+
+    def thickness_upper_bound(self, train_input_points, test_input_points):
+        """
+        Computes theoretical upper bound on the thickness
+        """
+        upper_bounds = []
+        for test_input_point in test_input_points:
+            augmented_input_points = np.concatenate(
+                (train_input_points, test_input_point.reshape(1, -1))
+            )
+            gram_matrix = self.predictor._get_kernel(augmented_input_points)
+            upper_bound = compute_thickness_upper_bound(
+                gram_matrix, self.predictor.lam, self.loss_lams["rho"]
+            )
+            upper_bounds.append(upper_bound)
+
+        return upper_bounds

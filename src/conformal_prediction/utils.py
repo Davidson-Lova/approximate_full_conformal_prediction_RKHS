@@ -54,3 +54,21 @@ def inter_finder(objective, y_min, y_max, y_hat):
             else:
                 print("Prediction not in the predictive region")
                 return P.open(0, 0)
+
+
+def interval_length(interval):
+    """
+    Compute the length of an interval
+
+    Args:
+        interval (P.closed): interval
+
+    Returns:
+        (float): interval length
+    """
+    if interval.empty:
+        return 0
+    length = 0
+    for subinterval in interval:
+        length += subinterval.upper - subinterval.lower
+    return length
