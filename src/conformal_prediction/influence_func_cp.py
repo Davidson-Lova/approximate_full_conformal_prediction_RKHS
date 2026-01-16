@@ -367,7 +367,7 @@ class InfluenceFunctionConformalPredictor:
                     ),
                     output_min,
                     output_max,
-                    predictions[-1, :],
+                    predictions[-1, :].item(),
                 )
 
                 lower_p_value_ = compute_lower_p_value_(
@@ -382,7 +382,7 @@ class InfluenceFunctionConformalPredictor:
                     ),
                     output_min,
                     output_max,
-                    predictions[-1, :],
+                    predictions[-1, :].item(),
                 )
 
                 prediction_regions.append(

@@ -148,13 +148,14 @@ class StableConformalPredictor:
                     self.non_conformity,
                     predictions[-1, :],
                 )
+
                 upper_prediction_region = inter_finder(
                     lambda output_value: (
                         upper_p_value_(output_value) - confidence_control_level
                     ),
                     output_min,
                     output_max,
-                    predictions[-1, :],
+                    predictions[-1, :].item(),
                 )
 
                 lower_p_value_ = compute_lower_p_value_(
@@ -169,7 +170,7 @@ class StableConformalPredictor:
                     ),
                     output_min,
                     output_max,
-                    predictions[-1, :],
+                    predictions[-1, :].item(),
                 )
 
                 prediction_regions.append(
